@@ -19,9 +19,9 @@ jobs:
     name: Compile and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '21'
@@ -32,14 +32,14 @@ jobs:
 
       - name: Upload test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: surefire-reports
           path: target/surefire-reports/
           if-no-files-found: ignore
 
       - name: Upload plugin jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: DisplayNames-jar
           path: target/DisplayNames-*.jar
@@ -61,7 +61,7 @@ jobs:
     env:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
@@ -93,7 +93,7 @@ jobs:
             echo "to turn this on. Everything else in this workflow works without it."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: steps.guard.outputs.run == 'true' && env.ANTHROPIC_API_KEY != ''
         with:
           distribution: temurin
