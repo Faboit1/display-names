@@ -178,3 +178,39 @@ The parts worth testing are pure Java and covered without a server: legacy-code 
 (including hex runs and malformed input), placeholder detection and component caching, and
 the viewer grid's bit-packing, negative-coordinate handling, neighbourhood coverage guarantee
 and concurrent updates.
+
+## Continuous integration
+
+`.github/workflows/build.yml` runs on every push to `main`, every pull request,
+and on demand from the Actions tab. It has three jobs.
+
+**`build`** compiles and tests on Temurin 21 with a cached Maven repository, then
+uploads the plugin jar as a workflow artifact named `DisplayNames-jar` — that is
+the download link on the run's summary page. Failing runs also upload the
+surefire reports so a red build can be diagnosed without reproducing it locally.
+
+**`automerge`** squash-merges the pull request and deletes its branch once the
+build is green. Two things hold a pull request back:
+
+- **Draft status.** Drafts build but never merge — draft is the "not ready"
+  signal, so marking a pull request ready for review is what arms the merge.
+- **The `no-automerge` label**, for holding back a pull request that is ready
+  but should wait for a human.
+
+Fork pull requests never auto-merge.
+
+**`autofix`** runs only when the build fails, and asks Claude to fix it, commit
+and push. It attempts this **once per human push** — if the last commit on the
+branch is already an automated fix, it stops and leaves the failure for a person,
+so a fix that does not work cannot loop.
+
+### Turning autofix on
+
+`autofix` needs an `ANTHROPIC_API_KEY` repository secret
+(*Settings → Secrets and variables → Actions*). Without one it does nothing but
+write a note on the run summary explaining why — the rest of the workflow is
+unaffected.
+
+Auto-merging also needs *Settings → Actions → General → Workflow permissions* set
+to **Read and write permissions**. If it is not, the build still passes and the
+merge step fails with a summary saying exactly that.

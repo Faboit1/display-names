@@ -1,0 +1,162 @@
+name: Build
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  # Superseded PR builds are pointless; never cancel a build of main.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Compile and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build
+        run: mvn -B --no-transfer-progress clean package
+
+      - name: Upload test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports/
+          if-no-files-found: ignore
+
+      - name: Upload plugin jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: DisplayNames-jar
+          path: target/DisplayNames-*.jar
+          if-no-files-found: error
+
+  autofix:
+    name: Fix a failing build
+    needs: build
+    # Only same-repo pull requests: a fork's token cannot push, and we would not
+    # want it to.
+    if: >-
+      failure()
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Decide whether to attempt a fix
+        id: guard
+        run: |
+          # One attempt per human push. Without this, a fix that does not work
+          # would trigger another build, another fix, and so on forever.
+          author=$(git log -1 --format='%an')
+          if [ "$author" = "claude[bot]" ]; then
+            echo "The last commit is already an automated fix, so this one needs a human." \
+              >> "$GITHUB_STEP_SUMMARY"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Explain a missing API key
+        if: steps.guard.outputs.run == 'true' && env.ANTHROPIC_API_KEY == ''
+        run: |
+          {
+            echo "### Automatic fixing is not configured"
+            echo
+            echo "The build failed and nothing tried to fix it, because the"
+            echo '`ANTHROPIC_API_KEY` repository secret is not set.'
+            echo
+            echo "Add one under **Settings -> Secrets and variables -> Actions**"
+            echo "to turn this on. Everything else in this workflow works without it."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-java@v4
+        if: steps.guard.outputs.run == 'true' && env.ANTHROPIC_API_KEY != ''
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Let Claude fix the build
+        if: steps.guard.outputs.run == 'true' && env.ANTHROPIC_API_KEY != ''
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: >-
+            --allowedTools "Bash(mvn:*),Bash(git:*),Read,Edit,Write,Glob,Grep"
+          prompt: |
+            The Maven build failed on this pull request. Fix it.
+
+            This is a Paper/Folia Minecraft plugin built with Maven on Java 21.
+            Reproduce the failure with `mvn -B clean package`, find the root
+            cause, and fix it with the smallest change that addresses it.
+
+            Rules:
+            - Never delete, skip, disable or weaken a test to get to green. If a
+              test fails, either the code is wrong or the test's expectation is
+              wrong; work out which and say so in the commit message.
+            - Do not widen the pull request. Fix the build, nothing else.
+            - Re-run `mvn -B clean package` until it passes before committing.
+            - If you cannot get it green, do not commit a partial fix. Leave a
+              comment explaining exactly what is failing and why, and stop.
+
+            When the build passes, commit the fix and push it to this branch.
+
+  automerge:
+    name: Merge when green
+    needs: build
+    # Draft is the "not ready" signal: draft pull requests build but never merge.
+    # Add the `no-automerge` label to hold one back without making it a draft.
+    if: >-
+      success()
+      && github.event_name == 'pull_request'
+      && github.event.pull_request.draft == false
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && !contains(github.event.pull_request.labels.*.name, 'no-automerge')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Squash and merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh pr merge "$NUMBER" --repo "$REPO" --squash --delete-branch; then
+            echo "Merged #$NUMBER." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo "### Could not merge #$NUMBER"
+            echo
+            echo "The build passed but the merge was refused. The usual cause is"
+            echo "workflow permissions: check **Settings -> Actions -> General ->"
+            echo "Workflow permissions** is set to *Read and write permissions*."
+            echo "A branch protection rule requiring a review will also block this."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
