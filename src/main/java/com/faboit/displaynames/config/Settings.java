@@ -1,5 +1,6 @@
 package com.faboit.displaynames.config;
 
+import com.faboit.displaynames.nametag.TeamGuard;
 import com.faboit.displaynames.text.LegacyColors;
 import com.faboit.displaynames.text.NametagTemplate;
 import com.faboit.displaynames.text.TextRenderer;
@@ -33,7 +34,9 @@ public final class Settings {
     private final Set<String> disabledWorlds;
 
     private final boolean hideFromSelf;
-    private final boolean hideVanillaNametag;
+    private final TeamGuard.Mode teamMode;
+    private final String teamName;
+    private final long teamReassertInterval;
     private final boolean hideWhileSneaking;
     private final boolean hideWhileInvisible;
     private final boolean hideInSpectator;
@@ -46,15 +49,16 @@ public final class Settings {
 
     private Settings(FileConfiguration config, TextRenderer renderer, Logger logger) {
         this.refreshInterval = Math.max(0, config.getInt("refresh-interval", 10));
-        this.display = DisplayOptions.load(section(config, "display"), section(config, "offset"), logger);
+        this.display = DisplayOptions.load(config.getConfigurationSection("display"),
+                config.getConfigurationSection("offset"), DisplayOptions.defaults(), logger);
 
         List<String> defaultLines = config.getStringList("nametag.lines");
         if (defaultLines.isEmpty()) {
             logger.warning("nametag.lines is empty - players without a matching profile get no nametag.");
         }
         this.defaultProfile = new Profile("default", null, Integer.MIN_VALUE,
-                NametagTemplate.compile(defaultLines, renderer));
-        this.profiles = loadProfiles(config.getConfigurationSection("profiles"), renderer, logger);
+                NametagTemplate.compile(defaultLines, renderer), display);
+        this.profiles = loadProfiles(config.getConfigurationSection("profiles"), renderer, display, logger);
 
         Set<String> worlds = new HashSet<>();
         for (String world : config.getStringList("visibility.disabled-worlds")) {
@@ -64,11 +68,23 @@ public final class Settings {
 
         ConfigurationSection visibility = section(config, "visibility");
         this.hideFromSelf = visibility.getBoolean("hide-from-self", true);
-        this.hideVanillaNametag = visibility.getBoolean("hide-vanilla-nametag", true);
         this.hideWhileSneaking = visibility.getBoolean("hide-while-sneaking", false);
         this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", true);
         this.hideInSpectator = visibility.getBoolean("hide-in-spectator", true);
         this.hideWhileVanished = visibility.getBoolean("hide-while-vanished", true);
+
+        // Accepts both the old `hide-vanilla-nametag: true` boolean and the current block form.
+        if (visibility.isConfigurationSection("hide-vanilla-nametag")) {
+            ConfigurationSection vanilla = visibility.getConfigurationSection("hide-vanilla-nametag");
+            this.teamMode = TeamGuard.Mode.parse(vanilla.getString("mode"), TeamGuard.Mode.ADOPT);
+            this.teamName = vanilla.getString("team-name", "displaynames");
+            this.teamReassertInterval = Math.max(0L, vanilla.getLong("reassert-interval", 100L));
+        } else {
+            this.teamMode = visibility.getBoolean("hide-vanilla-nametag", true)
+                    ? TeamGuard.Mode.ADOPT : TeamGuard.Mode.NONE;
+            this.teamName = "displaynames";
+            this.teamReassertInterval = 100L;
+        }
 
         ConfigurationSection performance = section(config, "performance");
         this.skipWithoutViewers = performance.getBoolean("skip-updates-without-viewers", true);
@@ -76,7 +92,7 @@ public final class Settings {
         this.componentCacheSize = Math.max(0, performance.getInt("component-cache-size", 512));
 
         int configuredGrid = performance.getInt("viewer-grid-size", 128);
-        int minimumGrid = (int) Math.ceil(display.renderDistanceBlocks());
+        int minimumGrid = (int) Math.ceil(widestRenderDistance());
         if (configuredGrid < minimumGrid) {
             logger.warning("performance.viewer-grid-size (" + configuredGrid + ") is smaller than the tag render "
                     + "distance (" + minimumGrid + " blocks); raising it so nametags are not skipped while visible.");
@@ -88,8 +104,7 @@ public final class Settings {
     }
 
     /**
-     * Reads the legacy-colour and cache settings needed to build the renderer, before the
-     * renderer itself is required to compile templates.
+     * Reads the renderer's own settings before the renderer is needed to compile templates.
      */
     public static TextRenderer createRenderer(FileConfiguration config, Logger logger) {
         return new TextRenderer(logger,
@@ -101,7 +116,8 @@ public final class Settings {
         return new Settings(config, renderer, logger);
     }
 
-    private static List<Profile> loadProfiles(ConfigurationSection root, TextRenderer renderer, Logger logger) {
+    private static List<Profile> loadProfiles(ConfigurationSection root, TextRenderer renderer,
+                                              DisplayOptions parent, Logger logger) {
         if (root == null) return List.of();
 
         List<Profile> loaded = new ArrayList<>();
@@ -119,8 +135,11 @@ public final class Settings {
                 logger.warning("Profile '" + id + "' has no lines and was skipped.");
                 continue;
             }
+            // Inherits the global appearance unless the profile overrides part of it.
+            DisplayOptions profileDisplay = DisplayOptions.load(entry.getConfigurationSection("display"),
+                    entry.getConfigurationSection("offset"), parent, logger);
             loaded.add(new Profile(id, permission, entry.getInt("priority", 0),
-                    NametagTemplate.compile(lines, renderer)));
+                    NametagTemplate.compile(lines, renderer), profileDisplay));
         }
         loaded.sort(Comparator.comparingInt(Profile::priority).reversed());
         return Collections.unmodifiableList(loaded);
@@ -131,7 +150,16 @@ public final class Settings {
         return existing != null ? existing : config.createSection(path);
     }
 
-    /** Highest-priority profile the player has permission for, or the default format. */
+    /** The largest render distance across every profile - the viewer grid must cover all of them. */
+    private double widestRenderDistance() {
+        double widest = display.renderDistanceBlocks();
+        for (Profile profile : profiles) {
+            widest = Math.max(widest, profile.display().renderDistanceBlocks());
+        }
+        return widest;
+    }
+
+    /** Highest-priority profile the player has permission for, or the default. */
     public Profile profileFor(Player player) {
         // profiles is sorted by descending priority, so the first hit is the winner.
         for (int i = 0, size = profiles.size(); i < size; i++) {
@@ -175,8 +203,16 @@ public final class Settings {
         return hideFromSelf;
     }
 
-    public boolean hideVanillaNametag() {
-        return hideVanillaNametag;
+    public TeamGuard.Mode teamMode() {
+        return teamMode;
+    }
+
+    public String teamName() {
+        return teamName;
+    }
+
+    public long teamReassertInterval() {
+        return teamReassertInterval;
     }
 
     public boolean hideWhileSneaking() {

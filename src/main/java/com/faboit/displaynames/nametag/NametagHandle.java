@@ -1,6 +1,7 @@
 package com.faboit.displaynames.nametag;
 
 import com.faboit.displaynames.DisplayNames;
+import com.faboit.displaynames.config.DisplayOptions;
 import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.text.NametagTemplate;
@@ -37,6 +38,8 @@ public final class NametagHandle {
 
     private TextDisplay display;
     private UUID displayWorld;
+    /** Appearance the live entity was built with; a different instance means rebuild it. */
+    private DisplayOptions activeDisplay;
     private ScheduledTask task;
 
     /** Profile and resolved string behind the text currently on the entity. */
@@ -97,6 +100,7 @@ public final class NametagHandle {
         TextDisplay current = display;
         display = null;
         displayWorld = null;
+        activeDisplay = null;
         unindex();
         if (current == null) return;
         try {
@@ -145,7 +149,11 @@ public final class NametagHandle {
             discardDisplay();
             return;
         }
-        if (!ensureDisplay(settings)) return;
+
+        // Resolved before the entity is touched: a profile carries its own appearance, so which
+        // profile applies decides how the entity has to be built, not just what it says.
+        Profile profile = settings.profileFor(player);
+        if (!ensureDisplay(settings, profile)) return;
 
         if (shouldHide(settings)) {
             setBlank();
@@ -158,14 +166,13 @@ public final class NametagHandle {
             return;
         }
 
-        render(settings);
+        render(settings, profile);
     }
 
-    private void render(Settings settings) {
+    private void render(Settings settings, Profile profile) {
         boolean force = forced;
         forced = false;
 
-        Profile profile = settings.profileFor(player);
         NametagTemplate template = profile.template();
 
         if (template.isBlank()) {
@@ -213,23 +220,28 @@ public final class NametagHandle {
     /**
      * @return {@code true} when {@link #display} is alive and mounted on the player
      */
-    private boolean ensureDisplay(Settings settings) {
+    private boolean ensureDisplay(Settings settings, Profile profile) {
+        DisplayOptions options = profile.display();
         TextDisplay current = display;
         if (current != null) {
-            // Both checks read only the player's own entity data, which is always safe on this
-            // thread; a cross-world teleport or a dismount shows up as a missing passenger.
-            if (player.getWorld().getUID().equals(displayWorld) && player.getPassengers().contains(current)) {
+            // Appearance is baked in at spawn, so a profile change that alters it needs a new
+            // entity. The other two checks read only the player's own entity data, which is
+            // always safe on this thread; a cross-world teleport or a dismount shows up as a
+            // missing passenger.
+            if (activeDisplay == options
+                    && player.getWorld().getUID().equals(displayWorld)
+                    && player.getPassengers().contains(current)) {
                 return true;
             }
             discardDisplay();
         }
-        return spawn(settings);
+        return spawn(settings, options);
     }
 
-    private boolean spawn(Settings settings) {
+    private boolean spawn(Settings settings, DisplayOptions options) {
         World world = player.getWorld();
         Consumer<TextDisplay> initialiser = entity -> {
-            settings.display().apply(entity);
+            options.apply(entity);
             entity.text(Component.empty());
             entity.getPersistentDataContainer().set(service.markerKey(), PersistentDataType.BYTE, MARKER_VALUE);
         };
@@ -251,6 +263,7 @@ public final class NametagHandle {
 
         display = spawned;
         displayWorld = world.getUID();
+        activeDisplay = options;
         blank = true;
         lastResolved = null;
         lastProfile = null;
@@ -262,6 +275,7 @@ public final class NametagHandle {
         TextDisplay current = display;
         display = null;
         displayWorld = null;
+        activeDisplay = null;
         blank = true;
         lastResolved = null;
         lastProfile = null;

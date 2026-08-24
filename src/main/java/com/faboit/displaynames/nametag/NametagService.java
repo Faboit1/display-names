@@ -49,7 +49,7 @@ public final class NametagService {
     // ---------------------------------------------------------------- lifecycle
 
     public void start(Settings settings) {
-        teamGuard.setEnabled(settings.hideVanillaNametag());
+        teamGuard.configure(settings.teamMode(), settings.teamName(), settings.teamReassertInterval());
         for (Player online : Bukkit.getOnlinePlayers()) {
             add(online, settings);
         }
@@ -60,7 +60,9 @@ public final class NametagService {
         NametagHandle previous = handles.put(player.getUniqueId(), handle);
         if (previous != null) previous.stop();
         handle.start(settings);
-        if (settings.hideVanillaNametag()) teamGuard.track(player);
+        // A joining player has to be hidden on every scoreboard already in use, and every player
+        // already online has to be hidden on whatever scoreboard this one ends up viewing.
+        teamGuard.requestSweep();
     }
 
     /** Called from {@code PlayerQuitEvent}, i.e. already on the player's region thread. */
@@ -79,7 +81,7 @@ public final class NametagService {
         ViewerIndex rebuilt = new ViewerIndex(settings.viewerGridSize());
         this.viewerIndex = rebuilt;
 
-        teamGuard.setEnabled(settings.hideVanillaNametag());
+        teamGuard.configure(settings.teamMode(), settings.teamName(), settings.teamReassertInterval());
 
         for (Player online : Bukkit.getOnlinePlayers()) {
             NametagHandle handle = handles.get(online.getUniqueId());
