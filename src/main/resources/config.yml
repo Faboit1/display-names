@@ -10,11 +10,10 @@
 #  Placeholders (%...%) are resolved with PlaceholderAPI if it is installed.
 #  Legacy colour codes coming *out* of a placeholder (LuckPerms prefixes,
 #  Vault, ...) are converted to MiniMessage automatically - see
-#  `text.legacy-colors` further down.
+#  `text.legacy-colors` near the bottom.
 #
-#  The nametag is ONE TextDisplay entity mounted on the player, so the client
-#  moves it - the server never teleports it. Text is only re-sent when the
-#  rendered string actually changes.
+#  Every value in this file is optional. Delete anything you do not care about
+#  and the built-in default is used.
 # ---------------------------------------------------------------------------
 
 # The default nametag. One list entry = one line.
@@ -34,13 +33,115 @@ offset:
   x: 0.0
   y: 2.5
   z: 0.0
+  # Where a passenger attaches to a player. Vanilla uses height * 0.75 = 1.35.
+  # Only touch this if the tag sits at the wrong height on every player.
+  mount-anchor: 1.35
+
+# ---------------------------------------------------------------------------
+#  Appearance
+# ---------------------------------------------------------------------------
+display:
+
+  # How the text turns to face people.
+  #   CENTER     - always faces the viewer, both axes (a normal floating name)
+  #   VERTICAL   - turns left/right to follow the viewer, never tilts
+  #   HORIZONTAL - tilts up/down to follow the viewer, never turns
+  #   FIXED      - never moves; points wherever `rotation` says
+  billboard: CENTER
+
+  # Which way the text points. Ignored entirely by CENTER, and each of the
+  # other modes ignores the axis it follows the viewer on:
+  #   VERTICAL   uses pitch and roll (yaw follows the viewer)
+  #   HORIZONTAL uses yaw and roll   (pitch follows the viewer)
+  #   FIXED      uses all three
+  # Angles are degrees.
+  rotation:
+    # Minecraft's convention: 0 faces south (+Z), 90 faces west, 180 north,
+    # 270 east. Increasing yaw turns clockwise seen from above.
+    yaw: 0.0
+    # Positive tilts the top of the text away from you.
+    pitch: 0.0
+    # Positive rolls the text clockwise from the reader's point of view.
+    roll: 0.0
+
+  # Text size. Either one number for all axes, or a per-axis block:
+  #   scale: 1.5
+  # or
+  #   scale:
+  #     x: 1.5
+  #     y: 1.5
+  #     z: 1.0
+  scale: 1.0
+
+  # The panel behind the text.
+  background:
+    #   CUSTOM - use `color` and `opacity` below
+    #   CLIENT - vanilla behaviour: follows each player's own
+    #            "Text Background Opacity" video setting
+    #   NONE   - no background at all
+    mode: NONE
+    color: "#000000"
+    # 0 = invisible, 255 = solid. Vanilla's own background is 64.
+    opacity: 64
+
+  # Opacity of the glyphs themselves. 0-255, where 255 is solid.
+  # Anything below about 26 makes the text invisible.
+  text-opacity: 255
+
+  # Drop shadow on the glyphs.
+  text-shadow: false
+
+  # Render the text through blocks and terrain.
+  see-through: false
+
+  # LEFT | CENTER | RIGHT
+  alignment: CENTER
+
+  # Width in pixels before a line wraps on its own.
+  line-width: 200
+
+  # Render distance multiplier. 1.0 = ~64 blocks, 0.75 = ~48 blocks.
+  # Lower = less client work and less packet traffic.
+  view-range: 1.0
+
+  # Light level the text is drawn at, ignoring the world's own lighting.
+  # Set `enabled: false` to use world lighting instead (dark tags at night).
+  brightness:
+    enabled: true
+    block: 15   # 0-15
+    sky: 15     # 0-15
+
+  # The shadow the entity casts on the ground. Off by default; a nametag
+  # floating above someone's head casting a shadow looks odd.
+  entity-shadow:
+    radius: 0.0
+    strength: 1.0
+
+  # Size of the box used to decide the tag is off-screen. 0 = never culled,
+  # which stops tall multi-line tags vanishing at the edge of the screen.
+  culling:
+    width: 0.0
+    height: 0.0
+
+  # Outline colour, as #RRGGBB. Setting anything other than "none" also makes
+  # the tag glow.
+  glow-color: "none"
+
+  # Client-side smoothing. The tag rides the player, so the client already
+  # moves it smoothly; these only matter if you are animating a transform.
+  interpolation:
+    delay: 0
+    duration: 0
+    teleport-duration: 0   # 0-59
 
 # ---------------------------------------------------------------------------
 #  Per-permission formats
 # ---------------------------------------------------------------------------
 #  The first profile (highest priority) whose permission the player has wins.
 #  Players matching nothing get `nametag.lines` above.
-#  Remove/extend freely - an empty map is fine.
+#
+#  A profile may also override `offset` and any part of `display`. Anything it
+#  does not mention is inherited from the global settings above.
 profiles:
   admin:
     permission: "displaynames.profile.admin"
@@ -48,6 +149,9 @@ profiles:
     lines:
       - "<gradient:#ff5555:#ffaa00><bold>ADMIN</bold></gradient>"
       - "<white>%player_name%"
+    display:
+      scale: 1.15
+      glow-color: "#ff5555"
   donor:
     permission: "displaynames.profile.donor"
     priority: 50
@@ -55,59 +159,40 @@ profiles:
       - "<gradient:#55ffff:#ffffff>%player_name%</gradient>"
 
 # ---------------------------------------------------------------------------
-#  Appearance of the TextDisplay itself
-# ---------------------------------------------------------------------------
-display:
-  # CENTER    - always faces the viewer (recommended)
-  # VERTICAL  - rotates horizontally only
-  # HORIZONTAL- rotates vertically only
-  # FIXED     - never rotates
-  billboard: CENTER
-
-  # Text size multiplier.
-  scale: 1.0
-
-  # ARGB background behind the text.
-  #   "default"     - vanilla translucent black (follows the client's
-  #                   "Text Background Opacity" setting)
-  #   "transparent" - no background at all
-  #   "#80000000"   - explicit AARRGGBB hex
-  background: "transparent"
-
-  # 0-255. 255 = fully opaque. Values below ~26 make the text invisible.
-  text-opacity: 255
-
-  # Drop shadow behind the glyphs.
-  shadow: false
-
-  # Render through blocks/terrain.
-  see-through: false
-
-  # LEFT | CENTER | RIGHT
-  alignment: CENTER
-
-  # Wrap width in pixels before a line is broken automatically.
-  line-width: 200
-
-  # Render distance multiplier. 1.0 = ~64 blocks, 0.75 = ~48 blocks.
-  # Lower values = less client-side work and less packet traffic.
-  view-range: 1.0
-
-  # Ignore world lighting so the tag is readable at night / in caves.
-  full-brightness: true
-
-# ---------------------------------------------------------------------------
 #  When the nametag should be hidden
 # ---------------------------------------------------------------------------
 visibility:
-  # Hide the tag from the player wearing it (it would float in their face
-  # whenever they look up in first person).
+  # Hide the tag from the player wearing it (it would otherwise float in their
+  # own face whenever they look up in first person).
   hide-from-self: true
 
-  # Remove the vanilla username plate. Uses a scoreboard team with
-  # name-tag-visibility=NEVER on the main scoreboard.
-  # Disable this if another plugin already owns the player's team.
-  hide-vanilla-nametag: true
+  # Removing the vanilla username plate.
+  #
+  # The only way to do this without packet manipulation is a scoreboard team
+  # with name-tag-visibility = NEVER. The catch: a team only affects the plates
+  # a player sees if it is on the scoreboard THAT PLAYER is currently viewing.
+  # Sidebar, tab and scoreboard plugins move players onto their own scoreboards,
+  # so DisplayNames sweeps every scoreboard actually in use, and repeats on a
+  # timer because those plugins rebuild them constantly.
+  hide-vanilla-nametag:
+    #   ADOPT - leave existing team membership alone and just switch off
+    #           nametag visibility on whatever team a player is already in.
+    #           Compatible with tab-list sorting, which is usually driven by
+    #           team names. Use this if you run a tab or sidebar plugin.
+    #   TEAM  - put every player into our own team. Self-contained, but a
+    #           player can only be in one team, so this WILL fight anything
+    #           else that uses teams.
+    #   NONE  - do nothing; keep vanilla nametags.
+    mode: ADOPT
+
+    # Name of the team created for players who are not in one already.
+    # Max 16 characters.
+    team-name: "displaynames"
+
+    # How often (in ticks) to re-apply. Other plugins recreate their teams
+    # constantly, which silently undoes our change. 100 = every 5 seconds.
+    # Set to 0 to apply once at startup and on join only.
+    reassert-interval: 100
 
   # Hide the tag while the player is sneaking (vanilla-like behaviour).
   hide-while-sneaking: false
@@ -130,7 +215,7 @@ visibility:
 # ---------------------------------------------------------------------------
 text:
   # Convert legacy colour codes found in the final string into MiniMessage.
-  #   NONE      - off (fastest, but LuckPerms prefixes will show raw codes)
+  #   NONE      - off (fastest, but LuckPerms prefixes show raw codes)
   #   SECTION   - convert the section sign only - what plugins actually emit
   #   AMPERSAND - convert & codes only
   #   BOTH      - convert both
@@ -141,17 +226,18 @@ text:
 # ---------------------------------------------------------------------------
 performance:
   # Skip placeholder evaluation entirely for players that no other player is
-  # close enough to see. Nobody is looking, so nothing is recomputed - this is
-  # the single biggest saver on large servers with expensive placeholders
+  # close enough to see. Nobody is looking, so nothing is recomputed - the
+  # single biggest saver on large servers with expensive placeholders
   # (economy lookups, database-backed expansions, ...).
   skip-updates-without-viewers: true
 
-  # Grid resolution used by the check above, in blocks. Must be >= the render
-  # distance of the tag. Bigger = coarser = cheaper, but skips less often.
+  # Grid resolution used by the check above, in blocks. Raised automatically if
+  # it is smaller than your widest `view-range`. Bigger = cheaper but skips
+  # less often.
   viewer-grid-size: 128
 
-  # Cache parsed MiniMessage components, keyed by the resolved string.
-  # Players that share the same rank/format reuse one parse. 0 disables.
+  # Cache parsed MiniMessage components, keyed by the resolved string, so
+  # players sharing a rank share one parse. 0 disables.
   component-cache-size: 512
 
   # Spread each player's refresh over the interval instead of updating

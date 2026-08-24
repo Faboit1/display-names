@@ -5,6 +5,7 @@ import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.nametag.NametagHandle;
 import com.faboit.displaynames.nametag.NametagService;
+import com.faboit.displaynames.nametag.TeamGuard;
 import com.faboit.displaynames.text.TextRenderer;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -131,6 +132,24 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         line(sender, "Viewer grid", settings.skipWithoutViewers()
                 ? service.viewerIndex().cellSize() + " blocks"
                 : "disabled");
+
+        // The usual reason vanilla plates are still showing is that a sidebar or tab plugin moved
+        // players onto its own scoreboard, so surface how many boards the sweep actually reached.
+        TeamGuard guard = service.teamGuard();
+        if (guard.mode() == TeamGuard.Mode.NONE) {
+            line(sender, "Vanilla nametags", "left visible <dark_gray>(mode: NONE)");
+        } else {
+            line(sender, "Vanilla nametags", "hidden via " + guard.mode()
+                    + " <dark_gray>(" + guard.sweeps() + " sweeps)");
+            line(sender, "  scoreboards swept", String.valueOf(guard.lastScoreboards()));
+            line(sender, "  players covered", String.valueOf(guard.lastCovered()));
+            if (guard.mode() == TeamGuard.Mode.ADOPT) {
+                line(sender, "  teams adopted", String.valueOf(guard.lastAdopted()));
+            }
+            if (guard.lastError() != null) {
+                line(sender, "  last error", "<red>" + guard.lastError());
+            }
+        }
 
         if (sender instanceof Player player) {
             Profile profile = settings.profileFor(player);

@@ -120,11 +120,37 @@ head of a 1.8-block-tall player. If a resource pack or a plugin changes player h
 tag ends up misaligned, `offset.mount-anchor` (default `1.35`) tunes where a passenger
 attaches; it is not in the default file because it is rarely needed.
 
-The `display` section covers `billboard`, `scale`, `background`, `text-opacity`, `shadow`,
-`see-through`, `alignment`, `line-width`, `view-range` and `full-brightness`.
+The `display` section exposes every property a `TextDisplay` has:
+
+| Key | |
+|---|---|
+| `billboard` | `CENTER` / `VERTICAL` / `HORIZONTAL` / `FIXED` — which axes turn to face the viewer |
+| `rotation` | `yaw` / `pitch` / `roll` in degrees, for the axes the billboard does *not* follow the viewer on |
+| `scale` | one number, or a `x`/`y`/`z` block |
+| `background` | `mode: CUSTOM \| CLIENT \| NONE`, plus `color` and `opacity` (0–255) |
+| `text-opacity` | 0–255 on the glyphs themselves |
+| `text-shadow` | drop shadow on the glyphs |
+| `see-through` | render through terrain |
+| `alignment` | `LEFT` / `CENTER` / `RIGHT` |
+| `line-width` | wrap width in pixels |
+| `view-range` | `1.0` ≈ 64 blocks |
+| `brightness` | `enabled`, `block` and `sky` light levels (0–15) |
+| `entity-shadow` | `radius` and `strength` of the shadow cast on the ground |
+| `culling` | `width` / `height` of the off-screen test box; `0` never culls |
+| `glow-color` | `#RRGGBB` outline, or `none` |
+| `interpolation` | `delay`, `duration`, `teleport-duration` |
+
+`rotation` only matters when the billboard is not `CENTER`, and each mode ignores the axis it
+follows the viewer on: `VERTICAL` uses pitch and roll, `HORIZONTAL` uses yaw and roll, `FIXED`
+uses all three. Yaw follows Minecraft's own convention — 0 faces south, 90 west, 180 north,
+270 east.
 
 Lowering `view-range` is the cheapest way to reduce client-side cost on a crowded server:
 `0.75` renders tags to ~48 blocks instead of ~64.
+
+A profile may override `offset` and any part of `display`; anything it does not mention is
+inherited from the global block. Changing a player's profile rebuilds their entity, because
+appearance is baked in when the entity is created.
 
 ### Hiding
 
@@ -133,12 +159,33 @@ would otherwise float in the wearer's face in first person), `hide-while-sneakin
 `hide-while-invisible`, `hide-in-spectator`, `hide-while-vanished` (reads the standard
 `vanished` metadata used by Essentials, CMI and SuperVanish) and `disabled-worlds`.
 
-`hide-vanilla-nametag` removes the built-in username plate. The only way to do this without
-packet manipulation is a scoreboard team with `NAME_TAG_VISIBILITY = NEVER`, so **turn it off
-if another plugin already puts players in teams** — a player can only belong to one. The team
-is unregistered when the plugin disables, restoring vanilla nametags.
-
 Players with `displaynames.hidden` never get a nametag.
+
+### Removing the vanilla username plate
+
+`visibility.hide-vanilla-nametag` handles this, and it is worth knowing why it is not a
+one-liner. The only lever without packet manipulation is a scoreboard team with
+`NAME_TAG_VISIBILITY = NEVER` — but a team only affects the plates a player sees if it lives on
+**the scoreboard that player is currently viewing**. Any sidebar, tab or scoreboard plugin calls
+`setScoreboard` and moves players off the main scoreboard, at which point a team registered only
+there is invisible to them and every vanilla nametag comes back.
+
+So DisplayNames sweeps every scoreboard actually in use, not just the main one, and repeats on a
+timer because those plugins rebuild their scoreboards constantly.
+
+| `mode` | |
+|---|---|
+| `ADOPT` *(default)* | Leave existing team membership alone; switch off nametag visibility on whatever team the player is already in. Compatible with tab-list sorting, which is usually driven by team names. Use this if you run a tab or sidebar plugin. |
+| `TEAM` | Put every player into our own team. Self-contained, but a player can only be in one team, so this fights anything else that uses them. |
+| `NONE` | Do nothing; keep vanilla nametags. |
+
+`team-name` (max 16 characters) names the team used for players who are in none.
+`reassert-interval` is how often the sweep repeats, in ticks; `0` applies once at startup and on
+join only. Teams adopted from other plugins have their previous visibility restored when
+DisplayNames disables.
+
+If plates are still showing, `/dn status` reports how many scoreboards the last sweep reached,
+how many players it covered, and the last error if there was one.
 
 ## Commands
 
@@ -171,10 +218,48 @@ restarts — use the `displaynames.hidden` permission for a permanent opt-out.
 ## Development
 
 ```bash
-mvn test      # 28 tests over the colour converter, template compiler and viewer grid
+mvn test      # 47 tests
 ```
 
 The parts worth testing are pure Java and covered without a server: legacy-code conversion
-(including hex runs and malformed input), placeholder detection and component caching, and
-the viewer grid's bit-packing, negative-coordinate handling, neighbourhood coverage guarantee
-and concurrent updates.
+(including hex runs and malformed input), placeholder detection and component caching, the
+viewer grid's bit-packing, negative-coordinate handling, neighbourhood coverage guarantee and
+concurrent updates, and the whole `display` config surface — inheritance, background modes,
+opacity encoding, brightness clamping, the yaw convention, and that an un-overridden profile
+inherits the *same instance* so it does not needlessly rebuild entities.
+
+## Continuous integration
+
+`.github/workflows/build.yml` runs on every push to `main`, every pull request,
+and on demand from the Actions tab. It has three jobs.
+
+**`build`** compiles and tests on Temurin 21 with a cached Maven repository, then
+uploads the plugin jar as a workflow artifact named `DisplayNames-jar` — that is
+the download link on the run's summary page. Failing runs also upload the
+surefire reports so a red build can be diagnosed without reproducing it locally.
+
+**`automerge`** squash-merges the pull request and deletes its branch once the
+build is green. Two things hold a pull request back:
+
+- **Draft status.** Drafts build but never merge — draft is the "not ready"
+  signal, so marking a pull request ready for review is what arms the merge.
+- **The `no-automerge` label**, for holding back a pull request that is ready
+  but should wait for a human.
+
+Fork pull requests never auto-merge.
+
+**`autofix`** runs only when the build fails, and asks Claude to fix it, commit
+and push. It attempts this **once per human push** — if the last commit on the
+branch is already an automated fix, it stops and leaves the failure for a person,
+so a fix that does not work cannot loop.
+
+### Turning autofix on
+
+`autofix` needs an `ANTHROPIC_API_KEY` repository secret
+(*Settings → Secrets and variables → Actions*). Without one it does nothing but
+write a note on the run summary explaining why — the rest of the workflow is
+unaffected.
+
+Auto-merging also needs *Settings → Actions → General → Workflow permissions* set
+to **Read and write permissions**. If it is not, the build still passes and the
+merge step fails with a summary saying exactly that.
