@@ -1,0 +1,39 @@
+name: ${project.name}
+version: ${project.version}
+main: com.faboit.displaynames.DisplayNames
+api-version: '1.21'
+folia-supported: true
+authors: [ faboit1 ]
+description: ${project.description}
+softdepend: [ PlaceholderAPI, LuckPerms, Vault ]
+
+commands:
+  displaynames:
+    description: Manage DisplayNames.
+    usage: /displaynames <reload|refresh|toggle|status>
+    aliases: [ dn, nametags ]
+
+permissions:
+  displaynames.admin:
+    description: Full access to every DisplayNames command.
+    default: op
+    children:
+      displaynames.command.reload: true
+      displaynames.command.refresh: true
+      displaynames.command.toggle: true
+      displaynames.command.status: true
+  displaynames.command.reload:
+    description: Reload the configuration.
+    default: op
+  displaynames.command.refresh:
+    description: Force a nametag refresh.
+    default: op
+  displaynames.command.toggle:
+    description: Toggle a player's nametag on or off.
+    default: op
+  displaynames.command.status:
+    description: View runtime statistics.
+    default: op
+  displaynames.hidden:
+    description: Players with this permission never get a nametag.
+    default: false

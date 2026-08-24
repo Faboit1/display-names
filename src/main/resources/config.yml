@@ -1,0 +1,159 @@
+# ---------------------------------------------------------------------------
+#  DisplayNames  -  multi-line nametags as TextDisplay entities
+#  Folia + Paper  |  MiniMessage  |  PlaceholderAPI
+# ---------------------------------------------------------------------------
+#
+#  Every line below is parsed with MiniMessage:
+#      <yellow> <#ffffde> <gradient:black:white> <bold> <rainbow> ...
+#      https://docs.advntr.dev/minimessage/format.html
+#
+#  Placeholders (%...%) are resolved with PlaceholderAPI if it is installed.
+#  Legacy colour codes coming *out* of a placeholder (LuckPerms prefixes,
+#  Vault, ...) are converted to MiniMessage automatically - see
+#  `text.legacy-colors` further down.
+#
+#  The nametag is ONE TextDisplay entity mounted on the player, so the client
+#  moves it - the server never teleports it. Text is only re-sent when the
+#  rendered string actually changes.
+# ---------------------------------------------------------------------------
+
+# The default nametag. One list entry = one line.
+nametag:
+  lines:
+    - "<yellow>%luckperms_prefix%<white>%player_name% <#ffffde>%luckperms_suffix%"
+    - "<green>%vault_eco_balance%<white>$"
+
+# How often (in TICKS) placeholders are re-evaluated. 20 ticks = 1 second.
+# Set to 0 to never auto-refresh (tags then only update on join / world change
+# / `/dn refresh`). Higher = cheaper. 10 is a good balance.
+refresh-interval: 10
+
+# Where the text sits, in blocks, relative to the player's FEET.
+# A player is 1.8 blocks tall, so ~2.2 - 2.6 hovers just above the head.
+offset:
+  x: 0.0
+  y: 2.5
+  z: 0.0
+
+# ---------------------------------------------------------------------------
+#  Per-permission formats
+# ---------------------------------------------------------------------------
+#  The first profile (highest priority) whose permission the player has wins.
+#  Players matching nothing get `nametag.lines` above.
+#  Remove/extend freely - an empty map is fine.
+profiles:
+  admin:
+    permission: "displaynames.profile.admin"
+    priority: 100
+    lines:
+      - "<gradient:#ff5555:#ffaa00><bold>ADMIN</bold></gradient>"
+      - "<white>%player_name%"
+  donor:
+    permission: "displaynames.profile.donor"
+    priority: 50
+    lines:
+      - "<gradient:#55ffff:#ffffff>%player_name%</gradient>"
+
+# ---------------------------------------------------------------------------
+#  Appearance of the TextDisplay itself
+# ---------------------------------------------------------------------------
+display:
+  # CENTER    - always faces the viewer (recommended)
+  # VERTICAL  - rotates horizontally only
+  # HORIZONTAL- rotates vertically only
+  # FIXED     - never rotates
+  billboard: CENTER
+
+  # Text size multiplier.
+  scale: 1.0
+
+  # ARGB background behind the text.
+  #   "default"     - vanilla translucent black (follows the client's
+  #                   "Text Background Opacity" setting)
+  #   "transparent" - no background at all
+  #   "#80000000"   - explicit AARRGGBB hex
+  background: "transparent"
+
+  # 0-255. 255 = fully opaque. Values below ~26 make the text invisible.
+  text-opacity: 255
+
+  # Drop shadow behind the glyphs.
+  shadow: false
+
+  # Render through blocks/terrain.
+  see-through: false
+
+  # LEFT | CENTER | RIGHT
+  alignment: CENTER
+
+  # Wrap width in pixels before a line is broken automatically.
+  line-width: 200
+
+  # Render distance multiplier. 1.0 = ~64 blocks, 0.75 = ~48 blocks.
+  # Lower values = less client-side work and less packet traffic.
+  view-range: 1.0
+
+  # Ignore world lighting so the tag is readable at night / in caves.
+  full-brightness: true
+
+# ---------------------------------------------------------------------------
+#  When the nametag should be hidden
+# ---------------------------------------------------------------------------
+visibility:
+  # Hide the tag from the player wearing it (it would float in their face
+  # whenever they look up in first person).
+  hide-from-self: true
+
+  # Remove the vanilla username plate. Uses a scoreboard team with
+  # name-tag-visibility=NEVER on the main scoreboard.
+  # Disable this if another plugin already owns the player's team.
+  hide-vanilla-nametag: true
+
+  # Hide the tag while the player is sneaking (vanilla-like behaviour).
+  hide-while-sneaking: false
+
+  # Hide the tag while the player has the Invisibility effect.
+  hide-while-invisible: true
+
+  # Hide the tag in spectator mode.
+  hide-in-spectator: true
+
+  # Hide the tag for players vanished by Essentials/CMI/SuperVanish
+  # (checks the standard "vanished" metadata key).
+  hide-while-vanished: true
+
+  # Worlds where DisplayNames does nothing at all, e.g. [ "world_the_end" ].
+  disabled-worlds: []
+
+# ---------------------------------------------------------------------------
+#  Text handling
+# ---------------------------------------------------------------------------
+text:
+  # Convert legacy colour codes found in the final string into MiniMessage.
+  #   NONE      - off (fastest, but LuckPerms prefixes will show raw codes)
+  #   SECTION   - convert the section sign only - what plugins actually emit
+  #   AMPERSAND - convert & codes only
+  #   BOTH      - convert both
+  legacy-colors: SECTION
+
+# ---------------------------------------------------------------------------
+#  Performance
+# ---------------------------------------------------------------------------
+performance:
+  # Skip placeholder evaluation entirely for players that no other player is
+  # close enough to see. Nobody is looking, so nothing is recomputed - this is
+  # the single biggest saver on large servers with expensive placeholders
+  # (economy lookups, database-backed expansions, ...).
+  skip-updates-without-viewers: true
+
+  # Grid resolution used by the check above, in blocks. Must be >= the render
+  # distance of the tag. Bigger = coarser = cheaper, but skips less often.
+  viewer-grid-size: 128
+
+  # Cache parsed MiniMessage components, keyed by the resolved string.
+  # Players that share the same rank/format reuse one parse. 0 disables.
+  component-cache-size: 512
+
+  # Spread each player's refresh over the interval instead of updating
+  # everyone on the same tick. Leave enabled.
+  stagger-updates: true
