@@ -10,7 +10,7 @@ softdepend: [ PlaceholderAPI, LuckPerms, Vault ]
 commands:
   displaynames:
     description: Manage DisplayNames.
-    usage: /displaynames <reload|refresh|toggle|status>
+    usage: /displaynames <reload|refresh|status|cleanup|debug>
     aliases: [ dn, nametags ]
 
 permissions:
@@ -20,7 +20,6 @@ permissions:
     children:
       displaynames.command.reload: true
       displaynames.command.refresh: true
-      displaynames.command.toggle: true
       displaynames.command.status: true
       displaynames.command.cleanup: true
       displaynames.command.debug: true
@@ -29,9 +28,6 @@ permissions:
     default: op
   displaynames.command.refresh:
     description: Force a nametag refresh.
-    default: op
-  displaynames.command.toggle:
-    description: Toggle a player's nametag on or off.
     default: op
   displaynames.command.status:
     description: View runtime statistics.

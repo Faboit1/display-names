@@ -209,11 +209,21 @@ how many players it covered, and the last error if there was one.
 |---|---|---|
 | `/dn reload` | `displaynames.command.reload` | Re-read `config.yml` and rebuild every tag |
 | `/dn refresh [player\|*]` | `displaynames.command.refresh` | Force a re-render |
-| `/dn toggle [player]` | `displaynames.command.toggle` | Hide or show one player's tag |
 | `/dn status` | `displaynames.command.status` | Runtime counters |
 
-`displaynames.admin` (default: op) grants all four. `/dn toggle` is not persisted across
-restarts — use the `displaynames.hidden` permission for a permanent opt-out.
+| `/dn cleanup` | `displaynames.command.cleanup` | Remove stray nametags left in the world |
+| `/dn debug` | `displaynames.command.debug` | Report why placeholders or plates misbehave |
+
+`displaynames.admin` (default: op) grants all of them.
+
+There is deliberately **no runtime toggle** for showing a tag — every online player gets one.
+A per-player switch is just one more way for a nametag to be silently missing. The only opt-outs
+are server-side and deliberate: the `displaynames.hidden` permission (default `false`, so nobody
+holds it by accident) and `visibility.disabled-worlds`.
+
+`/dn debug` is the one to reach for when something looks wrong: it prints the active resolver,
+PlaceholderAPI's version, the raw template beside the resolved string, and the scoreboard and
+team the player is actually on with that team's nametag visibility.
 
 ## Notes and limits
 
@@ -232,7 +242,7 @@ restarts — use the `displaynames.hidden` permission for a permanent opt-out.
 ## Development
 
 ```bash
-mvn test      # 65 tests
+mvn test      # 66 tests
 ```
 
 The parts worth testing are pure Java and covered without a server: legacy-code conversion
