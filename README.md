@@ -30,7 +30,7 @@ offset:
 ## Building
 
 ```bash
-mvn clean package     # -> target/DisplayNames-1.0.0.jar
+mvn clean package     # -> target/DisplayNames-<version>.jar
 ```
 
 Drop the jar in `plugins/` and restart. `config.yml` is written on first start.
@@ -122,9 +122,9 @@ profiles:
 ### Position and appearance
 
 `offset.y` is measured in blocks **from the player's feet**, so `2.5` sits just above the
-head of a 1.8-block-tall player. If a resource pack or a plugin changes player height and the
-tag ends up misaligned, `offset.mount-anchor` (default `1.35`) tunes where a passenger
-attaches; it is not in the default file because it is rarely needed.
+head of a 1.8-block-tall player. If every tag sits at the wrong height — a resource pack or a
+plugin changing player height will do it — `offset.mount-anchor` (default `1.35`, vanilla's
+`height * 0.75`) tunes where a passenger attaches.
 
 The `display` section exposes every property a `TextDisplay` has:
 
