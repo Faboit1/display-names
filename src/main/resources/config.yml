@@ -49,8 +49,12 @@ display:
   #   FIXED      - never moves; points wherever `rotation` says
   billboard: CENTER
 
-  # Which way the text points. Ignored entirely by CENTER, and each of the
-  # other modes ignores the axis it follows the viewer on:
+  # Which way the text points. This is the ONLY thing that aims a fixed tag -
+  # the entity is always spawned facing due south, so a tag never inherits the
+  # direction its owner happened to be looking when it was created.
+  #
+  # Ignored entirely by CENTER, and each of the other modes ignores the axis it
+  # follows the viewer on:
   #   VERTICAL   uses pitch and roll (yaw follows the viewer)
   #   HORIZONTAL uses yaw and roll   (pitch follows the viewer)
   #   FIXED      uses all three
@@ -142,21 +146,29 @@ display:
 #
 #  A profile may also override `offset` and any part of `display`. Anything it
 #  does not mention is inherited from the global settings above.
-profiles:
-  admin:
-    permission: "displaynames.profile.admin"
-    priority: 100
-    lines:
-      - "<gradient:#ff5555:#ffaa00><bold>ADMIN</bold></gradient>"
-      - "<white>%player_name%"
-    display:
-      scale: 1.15
-      glow-color: "#ff5555"
-  donor:
-    permission: "displaynames.profile.donor"
-    priority: 50
-    lines:
-      - "<gradient:#55ffff:#ffffff>%player_name%</gradient>"
+#
+#  Every profile permission is registered with a default of `false`, so nobody
+#  holds one until you grant it - operators included. Grant them in LuckPerms
+#  (or whatever you use) the same way you would any other node.
+#
+#  The examples below are commented out on purpose: until you uncomment one,
+#  every player gets `nametag.lines` above and nothing else.
+profiles: {}
+#profiles:
+#  admin:
+#    permission: "displaynames.profile.admin"
+#    priority: 100
+#    lines:
+#      - "<gradient:#ff5555:#ffaa00><bold>ADMIN</bold></gradient>"
+#      - "<white>%player_name%"
+#    display:
+#      scale: 1.15
+#      glow-color: "#ff5555"
+#  donor:
+#    permission: "displaynames.profile.donor"
+#    priority: 50
+#    lines:
+#      - "<gradient:#55ffff:#ffffff>%player_name%</gradient>"
 
 # ---------------------------------------------------------------------------
 #  When the nametag should be hidden

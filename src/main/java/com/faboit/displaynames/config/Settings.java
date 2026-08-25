@@ -199,6 +199,11 @@ public final class Settings {
         return profiles;
     }
 
+    /** The format used by players who match no profile. */
+    Profile defaultProfile() {
+        return defaultProfile;
+    }
+
     public boolean hideFromSelf() {
         return hideFromSelf;
     }
