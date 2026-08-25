@@ -129,7 +129,7 @@ public final class DisplayNames extends JavaPlugin {
             placeholders = false;
             return;
         }
-        service.resolver(new PlaceholderApiResolver());
+        service.resolver(new PlaceholderApiResolver(getLogger()));
         placeholders = true;
         getLogger().info("Hooked into PlaceholderAPI.");
         service.refreshAll();

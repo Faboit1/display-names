@@ -23,6 +23,7 @@ permissions:
       displaynames.command.toggle: true
       displaynames.command.status: true
       displaynames.command.cleanup: true
+      displaynames.command.debug: true
   displaynames.command.reload:
     description: Reload the configuration.
     default: op
@@ -37,6 +38,9 @@ permissions:
     default: op
   displaynames.command.cleanup:
     description: Remove stray nametag entities left in the world.
+    default: op
+  displaynames.command.debug:
+    description: Report why placeholders or vanilla nametags are misbehaving.
     default: op
   displaynames.hidden:
     description: Players with this permission never get a nametag.

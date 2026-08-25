@@ -63,7 +63,9 @@ class ShippedConfigTest {
         assertEquals(10, settings.refreshInterval());
         assertTrue(settings.autoRefresh());
         assertTrue(settings.hideFromSelf());
-        assertTrue(settings.skipWithoutViewers());
+        // Ships OFF: it is a real saving, but it is the one setting that can make a tag look
+        // wrong rather than merely slow, and correctness comes first out of the box.
+        assertFalse(settings.skipWithoutViewers());
         assertEquals(128, settings.viewerGridSize());
         assertEquals(512, settings.componentCacheSize());
     }
