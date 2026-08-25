@@ -8,6 +8,7 @@ import com.faboit.displaynames.text.NametagTemplate;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.kyori.adventure.text.Component;
 import org.bukkit.GameMode;
+import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.TextDisplay;
@@ -246,10 +247,18 @@ public final class NametagHandle {
             entity.getPersistentDataContainer().set(service.markerKey(), PersistentDataType.BYTE, MARKER_VALUE);
         };
 
+        // Spawned facing due south rather than at the player's own yaw and pitch. An entity's
+        // rotation is part of what a non-CENTER billboard renders with, so inheriting the
+        // player's would freeze every tag at whatever direction its owner happened to be facing
+        // when it was created, and compose that on top of the configured rotation.
+        Location origin = player.getLocation();
+        origin.setYaw(0.0F);
+        origin.setPitch(0.0F);
+
         TextDisplay spawned;
         try {
             // Configured through the consumer so the entity is never visible in a default state.
-            spawned = world.spawn(player.getLocation(), TextDisplay.class, initialiser);
+            spawned = world.spawn(origin, TextDisplay.class, initialiser);
         } catch (RuntimeException ex) {
             plugin.getLogger().log(Level.WARNING, "Could not spawn a nametag for " + player.getName(), ex);
             return false;

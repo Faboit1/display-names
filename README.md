@@ -103,6 +103,12 @@ MiniMessage work too.
 The first profile — highest `priority` — whose `permission` the player has wins. Players
 matching nothing get `nametag.lines`.
 
+Profiles ship **commented out**, and every profile permission is registered at startup with a
+default of `false`. Both matter: Bukkit resolves a permission nobody has declared as
+`PermissionDefault.OP`, so an undeclared profile node is held by *every operator* — which
+silently hands admins the highest-priority profile and overrides the nametag they configured.
+Grant profile nodes explicitly in your permission plugin, the same as any other node.
+
 ```yaml
 profiles:
   admin:
@@ -140,7 +146,9 @@ The `display` section exposes every property a `TextDisplay` has:
 | `glow-color` | `#RRGGBB` outline, or `none` |
 | `interpolation` | `delay`, `duration`, `teleport-duration` |
 
-`rotation` only matters when the billboard is not `CENTER`, and each mode ignores the axis it
+`rotation` is the only thing that aims a fixed tag: the entity is always spawned facing due
+south, so a tag never inherits the direction its owner happened to be looking when it was
+created. It only matters when the billboard is not `CENTER`, and each mode ignores the axis it
 follows the viewer on: `VERTICAL` uses pitch and roll, `HORIZONTAL` uses yaw and roll, `FIXED`
 uses all three. Yaw follows Minecraft's own convention — 0 faces south, 90 west, 180 north,
 270 east.
@@ -218,7 +226,7 @@ restarts — use the `displaynames.hidden` permission for a permanent opt-out.
 ## Development
 
 ```bash
-mvn test      # 47 tests
+mvn test      # 54 tests
 ```
 
 The parts worth testing are pure Java and covered without a server: legacy-code conversion

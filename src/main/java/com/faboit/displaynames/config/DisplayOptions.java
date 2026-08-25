@@ -279,10 +279,19 @@ public final class DisplayOptions {
     private static Quaternionf readRotation(ConfigurationSection display, Quaternionf parent) {
         ConfigurationSection rotation = display.getConfigurationSection("rotation");
         if (rotation == null) return parent;
+
+        double yaw = rotation.getDouble("yaw", 0.0D);
+        double pitch = rotation.getDouble("pitch", 0.0D);
+        double roll = rotation.getDouble("roll", 0.0D);
+
+        // Spelling out three zeroes, as the shipped config does, is not a rotation. Inheriting
+        // avoids both a pointless object and a negated zero in the quaternion's components.
+        if (yaw == 0.0D && pitch == 0.0D && roll == 0.0D) return parent;
+
         return new Quaternionf().rotationYXZ(
-                (float) Math.toRadians(-rotation.getDouble("yaw", 0.0D)),
-                (float) Math.toRadians(rotation.getDouble("pitch", 0.0D)),
-                (float) Math.toRadians(rotation.getDouble("roll", 0.0D)));
+                (float) Math.toRadians(-yaw),
+                (float) Math.toRadians(pitch),
+                (float) Math.toRadians(roll));
     }
 
     private static Display.Brightness readBrightness(ConfigurationSection display,

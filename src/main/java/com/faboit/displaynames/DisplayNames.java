@@ -1,6 +1,7 @@
 package com.faboit.displaynames;
 
 import com.faboit.displaynames.command.DisplayNamesCommand;
+import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.listener.PlayerListener;
 import com.faboit.displaynames.nametag.NametagService;
@@ -8,6 +9,9 @@ import com.faboit.displaynames.text.PlaceholderApiResolver;
 import com.faboit.displaynames.text.PlaceholderResolver;
 import com.faboit.displaynames.text.TextRenderer;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.permissions.Permission;
+import org.bukkit.permissions.PermissionDefault;
+import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -43,6 +47,7 @@ public final class DisplayNames extends JavaPlugin {
         this.service = new NametagService(this, renderer, settings);
 
         hookPlaceholderApi();
+        registerProfilePermissions(settings);
         getServer().getPluginManager().registerEvents(new PlayerListener(this), this);
 
         PluginCommand command = getCommand("displaynames");
@@ -72,7 +77,32 @@ public final class DisplayNames extends JavaPlugin {
         Settings fresh = Settings.load(getConfig(), renderer, getLogger());
         // Published before the rebuild so refresh tasks never read the old snapshot afterwards.
         this.settings = fresh;
+        registerProfilePermissions(fresh);
         service.reload(renderer, fresh);
+    }
+
+    /**
+     * Gives every profile permission an explicit default of {@code false}.
+     *
+     * <p>Bukkit resolves a permission nobody has declared as {@link PermissionDefault#OP}, so an
+     * undeclared profile node is held by every operator. That silently hands admins the
+     * highest-priority profile and overrides the nametag they actually configured - a trap that
+     * applies to profiles the user invents just as much as to the shipped examples, which is why
+     * this registers them at runtime rather than listing a couple of nodes in plugin.yml.
+     *
+     * <p>An operator who genuinely wants a profile can still grant the node in their permission
+     * plugin; this only stops it being granted by accident.
+     */
+    private void registerProfilePermissions(Settings source) {
+        PluginManager pluginManager = getServer().getPluginManager();
+        for (Profile profile : source.profiles()) {
+            String node = profile.permission();
+            if (node == null || node.isBlank()) continue;
+            if (pluginManager.getPermission(node) != null) continue;
+            pluginManager.addPermission(new Permission(node,
+                    "Grants the DisplayNames '" + profile.id() + "' nametag profile.",
+                    PermissionDefault.FALSE));
+        }
     }
 
     private void hookPlaceholderApi() {
