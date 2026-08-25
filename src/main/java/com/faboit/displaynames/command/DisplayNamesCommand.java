@@ -22,11 +22,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-/** {@code /displaynames} - reload, force refreshes, toggle a player's tag and read counters. */
+/** {@code /displaynames} - reload, force refreshes, diagnostics and cleanup. */
 public final class DisplayNamesCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = "<gray>[<gradient:#55ffff:#ffffff>DisplayNames</gradient><gray>] ";
-    private static final List<String> SUB_COMMANDS = List.of("reload", "refresh", "toggle", "status", "cleanup", "debug");
+    private static final List<String> SUB_COMMANDS = List.of("reload", "refresh", "status", "cleanup", "debug");
 
     private final DisplayNames plugin;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
@@ -45,7 +45,6 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         switch (args[0].toLowerCase(Locale.ROOT)) {
             case "reload" -> reload(sender);
             case "refresh" -> refresh(sender, args);
-            case "toggle" -> toggle(sender, args);
             case "status" -> status(sender);
             case "cleanup" -> cleanup(sender);
             case "debug" -> debug(sender);
@@ -88,29 +87,6 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         }
         handle.requestRefresh();
         send(sender, "<green>Refreshed <white>" + target.getName() + "<green>'s nametag.");
-    }
-
-    private void toggle(CommandSender sender, String[] args) {
-        if (denied(sender, "displaynames.command.toggle")) return;
-
-        Player target;
-        if (args.length >= 2) {
-            target = Bukkit.getPlayerExact(args[1]);
-            if (target == null) {
-                send(sender, "<red>No online player named <white>" + args[1] + "<red>.");
-                return;
-            }
-        } else if (sender instanceof Player self) {
-            target = self;
-        } else {
-            send(sender, "<red>Usage from console: <white>/dn toggle <player>");
-            return;
-        }
-
-        boolean visible = plugin.service().toggle(target);
-        send(sender, visible
-                ? "<green>Nametag enabled for <white>" + target.getName() + "<green>."
-                : "<yellow>Nametag hidden for <white>" + target.getName() + "<yellow>.");
     }
 
     /**
@@ -226,15 +202,13 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         }
 
         if (sender instanceof Player player) {
-            Profile profile = settings.profileFor(player);
-            line(sender, "Your profile", profile.id() + (service.isOptedOut(player) ? " <gray>(hidden)" : ""));
+            line(sender, "Your profile", settings.profileFor(player).id());
         }
     }
 
     private void usage(CommandSender sender, String label) {
         send(sender, "<gray>/" + label + " <white>reload <dark_gray>- reload config.yml");
         send(sender, "<gray>/" + label + " <white>refresh [player|*] <dark_gray>- force a re-render");
-        send(sender, "<gray>/" + label + " <white>toggle [player] <dark_gray>- hide or show a nametag");
         send(sender, "<gray>/" + label + " <white>status <dark_gray>- runtime counters");
         send(sender, "<gray>/" + label + " <white>cleanup <dark_gray>- remove stray nametags");
         send(sender, "<gray>/" + label + " <white>debug <dark_gray>- why placeholders/plates misbehave");
@@ -261,9 +235,9 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);
-            if (sub.equals("refresh") || sub.equals("toggle")) {
+            if (sub.equals("refresh")) {
                 List<String> names = new ArrayList<>();
-                if (sub.equals("refresh")) names.add("*");
+                names.add("*");
                 for (Player online : Bukkit.getOnlinePlayers()) {
                     names.add(online.getName());
                 }

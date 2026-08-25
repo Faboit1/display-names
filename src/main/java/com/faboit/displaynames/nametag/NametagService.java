@@ -13,7 +13,6 @@ import org.bukkit.persistence.PersistentDataType;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -31,7 +30,6 @@ public final class NametagService {
     private final TeamGuard teamGuard;
 
     private final Map<UUID, NametagHandle> handles = new ConcurrentHashMap<>();
-    private final Set<UUID> optedOut = ConcurrentHashMap.newKeySet();
 
     private final LongAdder updates = new LongAdder();
     private final LongAdder skipped = new LongAdder();
@@ -123,24 +121,14 @@ public final class NametagService {
         }
     }
 
+    /**
+     * Every online player gets a nametag unless the server explicitly opted them out through
+     * config or a permission. There is deliberately no runtime toggle: a per-player switch is
+     * one more way for a tag to be silently missing, which is the opposite of what this is for.
+     */
     public boolean isEnabledFor(Player player, Settings settings) {
-        if (optedOut.contains(player.getUniqueId())) return false;
         if (settings.worldDisabled(player.getWorld().getName())) return false;
         return !player.hasPermission(HIDDEN_PERMISSION);
-    }
-
-    /** @return {@code true} when the player now has a nametag */
-    public boolean toggle(Player player) {
-        UUID id = player.getUniqueId();
-        boolean nowVisible = optedOut.remove(id);
-        if (!nowVisible) optedOut.add(id);
-        NametagHandle handle = handles.get(id);
-        if (handle != null) handle.requestRefresh();
-        return nowVisible;
-    }
-
-    public boolean isOptedOut(Player player) {
-        return optedOut.contains(player.getUniqueId());
     }
 
     /**
