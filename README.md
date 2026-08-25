@@ -162,9 +162,15 @@ appearance is baked in when the entity is created.
 
 ### Hiding
 
-`visibility` controls when a tag is suppressed: `hide-from-self` (on by default — the tag
-would otherwise float in the wearer's face in first person), `hide-while-sneaking`,
-`hide-while-invisible`, `hide-in-spectator`, `hide-while-vanished` (reads the standard
+Tags are **see-through by default**, so they stay readable underground and behind walls.
+Sneaking or drinking an invisibility potion drops them back to line-of-sight only rather than
+hiding them outright — `see-through-while-sneaking` and `see-through-while-invisible` control
+that, and `hide-while-sneaking` / `hide-while-invisible` hide the tag entirely instead. Because
+see-through is a live entity property, switching it is a metadata flip, not a respawn.
+
+`visibility` controls the rest: `hide-from-self` (on by default — the tag
+would otherwise float in the wearer's face in first person),
+`hide-in-spectator`, `hide-while-vanished` (reads the standard
 `vanished` metadata used by Essentials, CMI and SuperVanish) and `disabled-worlds`.
 
 Players with `displaynames.hidden` never get a nametag.
@@ -226,7 +232,7 @@ restarts — use the `displaynames.hidden` permission for a permanent opt-out.
 ## Development
 
 ```bash
-mvn test      # 54 tests
+mvn test      # 65 tests
 ```
 
 The parts worth testing are pure Java and covered without a server: legacy-code conversion

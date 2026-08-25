@@ -16,7 +16,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
+import java.util.function.IntConsumer;
 
 /** Owns every {@link NametagHandle} and the shared state they read. */
 public final class NametagService {
@@ -61,8 +63,11 @@ public final class NametagService {
         if (previous != null) previous.stop();
         handle.start(settings);
         // A joining player has to be hidden on every scoreboard already in use, and every player
-        // already online has to be hidden on whatever scoreboard this one ends up viewing.
+        // already online has to be hidden on whatever scoreboard this one ends up viewing. The
+        // delayed passes catch tab plugins that swap the player's scoreboard shortly after join.
         teamGuard.requestSweep();
+        teamGuard.requestDelayedSweep(20L);
+        teamGuard.requestDelayedSweep(100L);
     }
 
     /** Called from {@code PlayerQuitEvent}, i.e. already on the player's region thread. */
@@ -136,6 +141,50 @@ public final class NametagService {
 
     public boolean isOptedOut(Player player) {
         return optedOut.contains(player.getUniqueId());
+    }
+
+    /**
+     * Removes stray nametag entities near online players.
+     *
+     * <p>A tag left behind by a death, a plugin reload or an unclean shutdown just floats there:
+     * it is non-persistent, so a full restart clears it, but nothing else does. This is the
+     * manual broom for a world that already has a pile of them.
+     *
+     * <p>Best effort by nature - a nearby-entity scan is only legal for the region that owns the
+     * player, so anything far from every online player is out of reach and waits for a restart.
+     *
+     * @param whenDone receives the number removed, once every player's region has reported
+     */
+    public void sweepNearbyOrphans(double radius, IntConsumer whenDone) {
+        Collection<? extends Player> online = Bukkit.getOnlinePlayers();
+        if (online.isEmpty()) {
+            whenDone.accept(0);
+            return;
+        }
+        AtomicInteger removed = new AtomicInteger();
+        AtomicInteger pending = new AtomicInteger(online.size());
+        Runnable settle = () -> {
+            if (pending.decrementAndGet() == 0) whenDone.accept(removed.get());
+        };
+
+        for (Player player : online) {
+            player.getScheduler().execute(plugin, () -> {
+                try {
+                    for (Entity nearby : player.getNearbyEntities(radius, radius, radius)) {
+                        if (!(nearby instanceof TextDisplay)) continue;
+                        if (!nearby.getPersistentDataContainer().has(markerKey, PersistentDataType.BYTE)) continue;
+                        // A live tag rides its owner; anything unmounted is an orphan.
+                        if (nearby.getVehicle() != null) continue;
+                        nearby.remove();
+                        removed.incrementAndGet();
+                    }
+                } catch (RuntimeException outOfRegion) {
+                    // Region boundaries make this best effort under Folia.
+                } finally {
+                    settle.run();
+                }
+            }, settle, 1L);
+        }
     }
 
     /**

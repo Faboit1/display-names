@@ -213,7 +213,8 @@ public final class DisplayOptions {
         return textShadow;
     }
 
-    boolean seeThrough() {
+    /** Base see-through state; overridden per tick while sneaking or invisible. */
+    public boolean seeThrough() {
         return seeThrough;
     }
 

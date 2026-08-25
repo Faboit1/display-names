@@ -10,6 +10,7 @@ import java.io.File;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,6 +74,18 @@ class ShippedConfigTest {
         assertEquals(TeamGuard.Mode.ADOPT, settings.teamMode());
         assertEquals("displaynames", settings.teamName());
         assertEquals(100L, settings.teamReassertInterval());
+    }
+
+    @Test
+    void tagsAreVisibleThroughTerrainByDefault() {
+        // Requested behaviour: readable underground, with sneaking and invisibility dropping
+        // back to line-of-sight only rather than hiding the tag outright.
+        Settings settings = shipped();
+        assertTrue(settings.display().seeThrough());
+        assertFalse(settings.seeThroughWhileSneaking());
+        assertFalse(settings.seeThroughWhileInvisible());
+        assertFalse(settings.hideWhileSneaking());
+        assertFalse(settings.hideWhileInvisible());
     }
 
     @Test

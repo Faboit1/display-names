@@ -41,6 +41,8 @@ public final class NametagHandle {
     private UUID displayWorld;
     /** Appearance the live entity was built with; a different instance means rebuild it. */
     private DisplayOptions activeDisplay;
+    /** see-through state currently on the entity, so it is only written when it changes. */
+    private boolean seeThroughApplied;
     private ScheduledTask task;
 
     /** Profile and resolved string behind the text currently on the entity. */
@@ -119,6 +121,17 @@ public final class NametagHandle {
         unindex();
     }
 
+    /**
+     * Removes the tag right now, without scheduling a replacement.
+     *
+     * <p>Called from {@code PlayerDeathEvent}, which fires on the player's own region thread.
+     * Death ejects passengers, so without this the tag is left floating at the death site until
+     * something else happens to clean it up.
+     */
+    public void dropDisplay() {
+        discardDisplay();
+    }
+
     /** Re-evaluates the tag as soon as the player's region thread is free. */
     public void requestRefresh() {
         player.getScheduler().execute(plugin, () -> {
@@ -155,6 +168,8 @@ public final class NametagHandle {
         // profile applies decides how the entity has to be built, not just what it says.
         Profile profile = settings.profileFor(player);
         if (!ensureDisplay(settings, profile)) return;
+
+        applySeeThrough(settings, profile.display());
 
         if (shouldHide(settings)) {
             setBlank();
@@ -273,6 +288,7 @@ public final class NametagHandle {
         display = spawned;
         displayWorld = world.getUID();
         activeDisplay = options;
+        seeThroughApplied = options.seeThrough();
         blank = true;
         lastResolved = null;
         lastProfile = null;
@@ -291,9 +307,16 @@ public final class NametagHandle {
         forced = true;
         if (current == null) return;
 
-        // The entity may have been left behind in another world or region after a teleport, so
-        // the removal is handed to whichever thread currently owns it.
-        current.getScheduler().execute(plugin, current::remove, null, 1L);
+        // Try the direct route first. On this thread the tag is nearly always in the player's own
+        // region, and a scheduled removal that never runs is exactly how orphaned tags pile up
+        // in the world - which is what leaves a dead player's nametag floating at the spot.
+        try {
+            current.remove();
+            return;
+        } catch (RuntimeException wrongRegion) {
+            // Left behind by a cross-world teleport; hand it to whichever thread owns it now.
+            current.getScheduler().execute(plugin, current::remove, null, 1L);
+        }
     }
 
     // ---------------------------------------------------------------- visibility
@@ -301,8 +324,32 @@ public final class NametagHandle {
     private boolean shouldHide(Settings settings) {
         if (settings.hideWhileSneaking() && player.isSneaking()) return true;
         if (settings.hideInSpectator() && player.getGameMode() == GameMode.SPECTATOR) return true;
-        if (settings.hideWhileInvisible() && player.hasPotionEffect(PotionEffectType.INVISIBILITY)) return true;
+        if (settings.hideWhileInvisible() && isInvisible()) return true;
         return settings.hideWhileVanished() && isVanished();
+    }
+
+    /**
+     * Drops the tag back to line-of-sight only while the player is sneaking or invisible.
+     *
+     * <p>see-through is a live entity property, so this is a metadata flip rather than a respawn,
+     * and it only writes when the state actually changed.
+     */
+    private void applySeeThrough(Settings settings, DisplayOptions options) {
+        boolean wanted;
+        if (player.isSneaking()) {
+            wanted = settings.seeThroughWhileSneaking();
+        } else if (isInvisible()) {
+            wanted = settings.seeThroughWhileInvisible();
+        } else {
+            wanted = options.seeThrough();
+        }
+        if (wanted == seeThroughApplied) return;
+        display.setSeeThrough(wanted);
+        seeThroughApplied = wanted;
+    }
+
+    private boolean isInvisible() {
+        return player.hasPotionEffect(PotionEffectType.INVISIBILITY);
     }
 
     private boolean isVanished() {

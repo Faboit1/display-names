@@ -39,6 +39,8 @@ public final class Settings {
     private final long teamReassertInterval;
     private final boolean hideWhileSneaking;
     private final boolean hideWhileInvisible;
+    private final boolean seeThroughWhileSneaking;
+    private final boolean seeThroughWhileInvisible;
     private final boolean hideInSpectator;
     private final boolean hideWhileVanished;
 
@@ -69,7 +71,11 @@ public final class Settings {
         ConfigurationSection visibility = section(config, "visibility");
         this.hideFromSelf = visibility.getBoolean("hide-from-self", true);
         this.hideWhileSneaking = visibility.getBoolean("hide-while-sneaking", false);
-        this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", true);
+        this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", false);
+        // Sneaking and invisibility drop the tag back to line-of-sight only rather than hiding
+        // it, which is what vanilla nametags do and what the see-through default trades away.
+        this.seeThroughWhileSneaking = visibility.getBoolean("see-through-while-sneaking", false);
+        this.seeThroughWhileInvisible = visibility.getBoolean("see-through-while-invisible", false);
         this.hideInSpectator = visibility.getBoolean("hide-in-spectator", true);
         this.hideWhileVanished = visibility.getBoolean("hide-while-vanished", true);
 
@@ -226,6 +232,16 @@ public final class Settings {
 
     public boolean hideWhileInvisible() {
         return hideWhileInvisible;
+    }
+
+    /** Whether a sneaking player's tag stays visible through terrain. */
+    public boolean seeThroughWhileSneaking() {
+        return seeThroughWhileSneaking;
+    }
+
+    /** Whether an invisible player's tag stays visible through terrain. */
+    public boolean seeThroughWhileInvisible() {
+        return seeThroughWhileInvisible;
     }
 
     public boolean hideInSpectator() {

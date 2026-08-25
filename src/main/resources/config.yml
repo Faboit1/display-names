@@ -95,8 +95,10 @@ display:
   # Drop shadow on the glyphs.
   text-shadow: false
 
-  # Render the text through blocks and terrain.
-  see-through: false
+  # Render the text through blocks and terrain, so tags stay visible underground
+  # and behind walls. Sneaking and invisibility override this - see the
+  # `visibility` section below.
+  see-through: true
 
   # LEFT | CENTER | RIGHT
   alignment: CENTER
@@ -206,11 +208,16 @@ visibility:
     # Set to 0 to apply once at startup and on join only.
     reassert-interval: 100
 
-  # Hide the tag while the player is sneaking (vanilla-like behaviour).
-  hide-while-sneaking: false
+  # Sneaking and invisibility normally do not hide the tag outright - they drop it
+  # back to line-of-sight only, so it stops showing through walls. That is what
+  # these two control; set them to true to keep tags see-through even then.
+  see-through-while-sneaking: false
+  see-through-while-invisible: false
 
-  # Hide the tag while the player has the Invisibility effect.
-  hide-while-invisible: true
+  # Hide the tag ENTIRELY while sneaking / invisible, rather than just taking away
+  # see-through. Leave these false to get the behaviour described above.
+  hide-while-sneaking: false
+  hide-while-invisible: false
 
   # Hide the tag in spectator mode.
   hide-in-spectator: true

@@ -117,6 +117,18 @@ public final class TeamGuard {
         Bukkit.getGlobalRegionScheduler().execute(plugin, this::sweep);
     }
 
+    /**
+     * Sweeps again after a delay.
+     *
+     * <p>Tab and sidebar plugins usually call {@code setScoreboard} a few ticks after a player
+     * joins, not during the join event, so the sweep that runs immediately can land on the board
+     * the player is about to be moved off.
+     */
+    public void requestDelayedSweep(long delayTicks) {
+        if (mode == Mode.NONE) return;
+        Bukkit.getGlobalRegionScheduler().runDelayed(plugin, ignored -> sweep(), Math.max(1L, delayTicks));
+    }
+
     /** Drops a leaving player from our own team so the entry does not linger. */
     public void untrack(Player player) {
         if (mode == Mode.NONE) return;
@@ -229,7 +241,7 @@ public final class TeamGuard {
     }
 
     private static String key(Scoreboard board, String team) {
-        return System.identityHashCode(board) + " " + team;
+        return System.identityHashCode(board) + "/" + team;
     }
 
     private String sanitiseTeamName(String raw) {
