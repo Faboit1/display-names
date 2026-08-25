@@ -14,6 +14,9 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.Plugin;
+import org.bukkit.scoreboard.Scoreboard;
+import org.bukkit.scoreboard.Team;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -23,7 +26,7 @@ import java.util.Locale;
 public final class DisplayNamesCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = "<gray>[<gradient:#55ffff:#ffffff>DisplayNames</gradient><gray>] ";
-    private static final List<String> SUB_COMMANDS = List.of("reload", "refresh", "toggle", "status", "cleanup");
+    private static final List<String> SUB_COMMANDS = List.of("reload", "refresh", "toggle", "status", "cleanup", "debug");
 
     private final DisplayNames plugin;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
@@ -45,6 +48,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
             case "toggle" -> toggle(sender, args);
             case "status" -> status(sender);
             case "cleanup" -> cleanup(sender);
+            case "debug" -> debug(sender);
             default -> usage(sender, label);
         }
         return true;
@@ -107,6 +111,65 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         send(sender, visible
                 ? "<green>Nametag enabled for <white>" + target.getName() + "<green>."
                 : "<yellow>Nametag hidden for <white>" + target.getName() + "<yellow>.");
+    }
+
+    /**
+     * Dumps what the plugin actually sees for the sender, so a "placeholders do not work" or
+     * "the vanilla plate is still there" report can be settled with facts rather than a guess.
+     */
+    private void debug(CommandSender sender) {
+        if (denied(sender, "displaynames.command.debug")) return;
+        if (!(sender instanceof Player player)) {
+            send(sender, "<red>Run this in game - it reports what one player sees.");
+            return;
+        }
+
+        Settings settings = plugin.settings();
+        Profile profile = settings.profileFor(player);
+        String raw = profile.template().raw();
+        String resolved = plugin.service().resolver().resolve(player, raw);
+
+        send(sender, "<gradient:#55ffff:#ffffff><bold>DisplayNames debug</bold></gradient>");
+        line(sender, "Profile", profile.id());
+        line(sender, "Resolver", plugin.service().resolver().getClass().getSimpleName());
+
+        Plugin papi = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+        line(sender, "PlaceholderAPI", papi == null
+                ? "<red>not found"
+                : papi.getDescription().getVersion() + (papi.isEnabled() ? " <green>(enabled)" : " <red>(DISABLED)"));
+
+        line(sender, "Template", escaped(raw));
+        line(sender, "Resolved", escaped(resolved));
+        if (raw.equals(resolved)) {
+            line(sender, "Verdict", "<red>nothing was substituted <gray>- every placeholder above "
+                    + "is unknown to PlaceholderAPI, so the expansion providing it is not installed. "
+                    + "Try <white>/papi ecloud download Player<gray>, then <white>/papi reload<gray>.");
+        } else {
+            line(sender, "Verdict", "<green>substitution is working <gray>- anything still shown as "
+                    + "%name% below is an expansion you have not installed.");
+        }
+
+        // The vanilla plate depends on the team on the board this player is VIEWING, not the main
+        // one, so report exactly that.
+        try {
+            Scoreboard board = player.getScoreboard();
+            boolean main = board.equals(Bukkit.getScoreboardManager().getMainScoreboard());
+            Team team = board.getEntryTeam(player.getName());
+            line(sender, "Your scoreboard", main ? "the main one" : "<yellow>a plugin's own board");
+            line(sender, "Your team", team == null
+                    ? "<yellow>none <gray>(nothing can hide your plate)"
+                    : team.getName() + " -> nametag visibility "
+                            + (team.getOption(Team.Option.NAME_TAG_VISIBILITY) == Team.OptionStatus.NEVER
+                                    ? "<green>NEVER <gray>(plate hidden)"
+                                    : "<red>" + team.getOption(Team.Option.NAME_TAG_VISIBILITY)));
+        } catch (RuntimeException ex) {
+            line(sender, "Scoreboard", "<red>could not be read: " + ex.getClass().getSimpleName());
+        }
+    }
+
+    /** Neutralises MiniMessage tags so a template is shown literally rather than rendered. */
+    private String escaped(String text) {
+        return "<white>" + miniMessage.escapeTags(text);
     }
 
     private void cleanup(CommandSender sender) {
@@ -174,6 +237,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         send(sender, "<gray>/" + label + " <white>toggle [player] <dark_gray>- hide or show a nametag");
         send(sender, "<gray>/" + label + " <white>status <dark_gray>- runtime counters");
         send(sender, "<gray>/" + label + " <white>cleanup <dark_gray>- remove stray nametags");
+        send(sender, "<gray>/" + label + " <white>debug <dark_gray>- why placeholders/plates misbehave");
     }
 
     private boolean denied(CommandSender sender, String permission) {

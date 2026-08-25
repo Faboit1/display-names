@@ -176,7 +176,10 @@ public final class NametagHandle {
             return;
         }
 
-        if (settings.skipWithoutViewers() && !hasViewer(settings)) {
+        // `!blank` matters: a tag that has never been rendered is still empty, so skipping it
+        // for want of a viewer would leave it permanently blank rather than merely stale. The
+        // optimisation only ever applies to a tag that already says something.
+        if (settings.skipWithoutViewers() && !blank && !hasViewer(settings)) {
             service.countSkipped();
             forced = true; // whatever changed while nobody watched is applied when someone does
             return;
