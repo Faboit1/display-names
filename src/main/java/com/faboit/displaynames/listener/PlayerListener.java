@@ -8,12 +8,14 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.event.player.PlayerToggleSneakEvent;
+import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.event.world.EntitiesLoadEvent;
 
 /**
@@ -38,10 +40,31 @@ public final class PlayerListener implements Listener {
         plugin.service().remove(event.getPlayer());
     }
 
+    /**
+     * Death ejects passengers, leaving the tag floating at the death site. Removing it here -
+     * on the player's own region thread, where a direct remove is legal - is what stops it
+     * hanging around; PlayerRespawnEvent then builds a fresh one.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onDeath(PlayerDeathEvent event) {
+        NametagHandle handle = plugin.service().handle(event.getEntity());
+        if (handle != null) handle.dropDisplay();
+    }
+
     /** Death ejects passengers, so the entity has to be rebuilt after respawning. */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onRespawn(PlayerRespawnEvent event) {
         respawnTag(event.getPlayer());
+    }
+
+    /**
+     * Picks up PlaceholderAPI if it enables after us - installed at runtime, or loaded later
+     * despite the softdepend. Without this the tags show raw %placeholder% text until a restart.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPluginEnable(PluginEnableEvent event) {
+        if (!"PlaceholderAPI".equals(event.getPlugin().getName())) return;
+        plugin.hookPlaceholderApi();
     }
 
     /** The old entity stays behind in the old world; build a new one in the new one. */

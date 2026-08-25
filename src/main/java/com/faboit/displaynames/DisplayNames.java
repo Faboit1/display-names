@@ -5,6 +5,7 @@ import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.listener.PlayerListener;
 import com.faboit.displaynames.nametag.NametagService;
+import com.faboit.displaynames.text.BuiltinPlaceholders;
 import com.faboit.displaynames.text.PlaceholderApiResolver;
 import com.faboit.displaynames.text.PlaceholderResolver;
 import com.faboit.displaynames.text.TextRenderer;
@@ -105,16 +106,33 @@ public final class DisplayNames extends JavaPlugin {
         }
     }
 
-    private void hookPlaceholderApi() {
-        if (getServer().getPluginManager().getPlugin("PlaceholderAPI") == null) {
-            getLogger().warning("PlaceholderAPI was not found - %placeholders% will be left as-is. "
-                    + "MiniMessage formatting still works.");
-            service.resolver(PlaceholderResolver.NONE);
+    /**
+     * Points the renderer at PlaceholderAPI if it is present, or at the built-in fallbacks.
+     *
+     * <p>Public and idempotent because it is called again from {@code PluginEnableEvent}: a
+     * server that installs PlaceholderAPI later, or loads it after us despite the softdepend,
+     * would otherwise show raw {@code %placeholder%} text until the next restart.
+     */
+    public void hookPlaceholderApi() {
+        boolean present = getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
+        if (present == placeholders && service.resolver() != PlaceholderResolver.NONE) return;
+
+        if (!present) {
+            getLogger().warning("""
+                    PlaceholderAPI is NOT installed.
+
+                    Only a few built-in %player_...% placeholders will resolve; everything else,
+                    including %luckperms_prefix% and %vault_eco_balance%, is shown as raw text.
+                    Install PlaceholderAPI and its expansions to fix this - no restart needed,
+                    DisplayNames picks it up as soon as it enables.""");
+            service.resolver(new BuiltinPlaceholders());
             placeholders = false;
             return;
         }
         service.resolver(new PlaceholderApiResolver());
         placeholders = true;
+        getLogger().info("Hooked into PlaceholderAPI.");
+        service.refreshAll();
     }
 
     /** The current configuration snapshot; never null after {@code onEnable}. */

@@ -23,7 +23,7 @@ import java.util.Locale;
 public final class DisplayNamesCommand implements CommandExecutor, TabCompleter {
 
     private static final String PREFIX = "<gray>[<gradient:#55ffff:#ffffff>DisplayNames</gradient><gray>] ";
-    private static final List<String> SUB_COMMANDS = List.of("reload", "refresh", "toggle", "status");
+    private static final List<String> SUB_COMMANDS = List.of("reload", "refresh", "toggle", "status", "cleanup");
 
     private final DisplayNames plugin;
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
@@ -44,6 +44,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
             case "refresh" -> refresh(sender, args);
             case "toggle" -> toggle(sender, args);
             case "status" -> status(sender);
+            case "cleanup" -> cleanup(sender);
             default -> usage(sender, label);
         }
         return true;
@@ -108,6 +109,16 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
                 : "<yellow>Nametag hidden for <white>" + target.getName() + "<yellow>.");
     }
 
+    private void cleanup(CommandSender sender) {
+        if (denied(sender, "displaynames.command.cleanup")) return;
+        send(sender, "<gray>Sweeping for stray nametags near online players...");
+        plugin.service().sweepNearbyOrphans(64.0D, removed -> send(sender, removed == 0
+                ? "<green>No stray nametags found."
+                : "<green>Removed <white>" + removed + "<green> stray nametag(s). "
+                        + "<gray>Any further from a player need a restart - they are "
+                        + "non-persistent, so a restart always clears them."));
+    }
+
     private void status(CommandSender sender) {
         if (denied(sender, "displaynames.command.status")) return;
 
@@ -162,6 +173,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         send(sender, "<gray>/" + label + " <white>refresh [player|*] <dark_gray>- force a re-render");
         send(sender, "<gray>/" + label + " <white>toggle [player] <dark_gray>- hide or show a nametag");
         send(sender, "<gray>/" + label + " <white>status <dark_gray>- runtime counters");
+        send(sender, "<gray>/" + label + " <white>cleanup <dark_gray>- remove stray nametags");
     }
 
     private boolean denied(CommandSender sender, String permission) {
