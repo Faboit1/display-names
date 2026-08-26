@@ -43,11 +43,15 @@ offset:
 display:
 
   # How the text turns to face people.
-  #   CENTER     - always faces the viewer, both axes (a normal floating name)
-  #   VERTICAL   - turns left/right to follow the viewer, never tilts
+  #   VERTICAL   - turns left/right to follow the viewer, never tilts. The tag
+  #                stays upright and locked directly above the head from every
+  #                angle, which is what you want for a nametag.
+  #   CENTER     - faces the viewer on BOTH axes. Looking down at someone tilts
+  #                the text flat, which swings it off the top of their head -
+  #                that is why this is not the default.
   #   HORIZONTAL - tilts up/down to follow the viewer, never turns
   #   FIXED      - never moves; points wherever `rotation` says
-  billboard: CENTER
+  billboard: VERTICAL
 
   # Which way the text points. This is the ONLY thing that aims a fixed tag -
   # the entity is always spawned facing due south, so a tag never inherits the
@@ -183,6 +187,11 @@ visibility:
   hide-from-self: true
 
   # Removing the vanilla username plate.
+  #
+  # IMPORTANT: this only affects the plate VANILLA draws. If you run TAB,
+  # NametagEdit or anything else that renders its own nametags, none of this
+  # touches them - turn nametags off in that plugin instead, and set mode to
+  # NONE here so DisplayNames stops rewriting its teams for nothing.
   #
   # The only way to do this without packet manipulation is a scoreboard team
   # with name-tag-visibility = NEVER. The catch: a team only affects the plates

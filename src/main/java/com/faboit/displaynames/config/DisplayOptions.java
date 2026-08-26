@@ -442,7 +442,7 @@ public final class DisplayOptions {
     }
 
     private static final class Builder {
-        private Display.Billboard billboard = Display.Billboard.CENTER;
+        private Display.Billboard billboard = Display.Billboard.VERTICAL;
         private Vector3f translation = new Vector3f(0.0F, 2.5F - DEFAULT_MOUNT_ANCHOR, 0.0F);
         private Vector3f scale = new Vector3f(1.0F, 1.0F, 1.0F);
         private Quaternionf leftRotation = new Quaternionf();

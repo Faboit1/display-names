@@ -155,6 +155,14 @@ public final class NametagHandle {
         if (stopped || !player.isOnline()) return;
         Settings settings = plugin.settings();
 
+        // A dead player still counts as online and still has a location - their corpse's. Without
+        // this the upkeep loop notices the tag PlayerDeathEvent just removed, decides it is
+        // missing, and helpfully respawns it at the death site, where it sits until they respawn.
+        if (player.isDead()) {
+            discardDisplay();
+            return;
+        }
+
         // Done first and unconditionally: a player without a nametag of their own is still
         // somebody who can see other people's.
         updateIndex(settings);

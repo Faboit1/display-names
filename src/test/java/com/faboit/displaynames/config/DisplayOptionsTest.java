@@ -201,7 +201,7 @@ class DisplayOptionsTest {
                 display:
                   billboard: sideways
                 """);
-        assertEquals(Display.Billboard.CENTER, options.billboard());
+        assertEquals(Display.Billboard.VERTICAL, options.billboard());
     }
 
     @Test
@@ -299,7 +299,9 @@ class DisplayOptionsTest {
     @Test
     void defaultsAreTheDocumentedOnes() {
         DisplayOptions defaults = DisplayOptions.defaults();
-        assertEquals(Display.Billboard.CENTER, defaults.billboard());
+        // VERTICAL rather than CENTER: CENTER tilts on both axes, so viewing a player from
+        // above rotates the text flat and swings it off the top of their head.
+        assertEquals(Display.Billboard.VERTICAL, defaults.billboard());
         assertEquals(TextDisplay.TextAlignment.CENTER, defaults.alignment());
         assertEquals(200, defaults.lineWidth());
         assertEquals(1.0F, defaults.viewRange(), EPSILON);

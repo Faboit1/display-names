@@ -5,6 +5,7 @@ import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.listener.PlayerListener;
 import com.faboit.displaynames.nametag.NametagService;
+import com.faboit.displaynames.nametag.TeamGuard;
 import com.faboit.displaynames.text.BuiltinPlaceholders;
 import com.faboit.displaynames.text.PlaceholderApiResolver;
 import com.faboit.displaynames.text.PlaceholderResolver;
@@ -59,6 +60,7 @@ public final class DisplayNames extends JavaPlugin {
         }
 
         service.start(settings);
+        warnAboutCompetingNametagPlugins(settings);
 
         getLogger().info("Enabled - refresh every " + (settings.autoRefresh()
                 ? settings.refreshInterval() + " ticks" : "manual only")
@@ -80,6 +82,28 @@ public final class DisplayNames extends JavaPlugin {
         this.settings = fresh;
         registerProfilePermissions(fresh);
         service.reload(renderer, fresh);
+    }
+
+    /**
+     * Points out a plugin that also draws nametags.
+     *
+     * <p>A scoreboard team only suppresses the plate vanilla draws. A plugin that renders its own
+     * nametags is unaffected by it, so the plate stays visible no matter what DisplayNames does -
+     * while DisplayNames keeps rewriting that plugin's teams every sweep for no benefit. Nothing
+     * about that is visible from in-game, so it is worth one line at startup.
+     */
+    private void warnAboutCompetingNametagPlugins(Settings source) {
+        if (source.teamMode() == TeamGuard.Mode.NONE) return;
+
+        for (String name : new String[] {"TAB", "NametagEdit", "Nametags", "UltimateTags"}) {
+            if (getServer().getPluginManager().getPlugin(name) == null) continue;
+            getLogger().warning(name + " is installed and draws its own nametags. A scoreboard team "
+                    + "only hides the plate VANILLA draws, so DisplayNames cannot hide " + name + "'s - "
+                    + "and it is rewriting " + name + "'s teams every sweep to no effect. Turn nametags "
+                    + "off in " + name + " and set visibility.hide-vanilla-nametag.mode to NONE so the "
+                    + "two stop overlapping.");
+            return;
+        }
     }
 
     /**
