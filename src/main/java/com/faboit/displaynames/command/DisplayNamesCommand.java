@@ -47,7 +47,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
             case "refresh" -> refresh(sender, args);
             case "status" -> status(sender);
             case "cleanup" -> cleanup(sender);
-            case "debug" -> debug(sender);
+            case "debug" -> debug(sender, args);
             default -> usage(sender, label);
         }
         return true;
@@ -90,22 +90,37 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
     }
 
     /**
-     * Dumps what the plugin actually sees for the sender, so a "placeholders do not work" or
-     * "the vanilla plate is still there" report can be settled with facts rather than a guess.
+     * Dumps what the plugin actually sees, so a "placeholders do not work" or "the vanilla plate
+     * is still there" report can be settled with facts rather than a guess.
+     *
+     * <p>With a target, reports that player as the SENDER sees them. That distinction is the
+     * whole point for nametag plates: whether you see somebody's plate is decided by their team
+     * as defined on <em>your</em> scoreboard, not on theirs.
      */
-    private void debug(CommandSender sender) {
+    private void debug(CommandSender sender, String[] args) {
         if (denied(sender, "displaynames.command.debug")) return;
-        if (!(sender instanceof Player player)) {
+        if (!(sender instanceof Player viewer)) {
             send(sender, "<red>Run this in game - it reports what one player sees.");
             return;
         }
 
-        Settings settings = plugin.settings();
-        Profile profile = settings.profileFor(player);
-        String raw = profile.template().raw();
-        String resolved = plugin.service().resolver().resolve(player, raw);
+        Player target = viewer;
+        if (args.length >= 2) {
+            target = Bukkit.getPlayerExact(args[1]);
+            if (target == null) {
+                send(sender, "<red>No online player named <white>" + args[1] + "<red>.");
+                return;
+            }
+        }
+        boolean self = target.equals(viewer);
 
-        send(sender, "<gradient:#55ffff:#ffffff><bold>DisplayNames debug</bold></gradient>");
+        Settings settings = plugin.settings();
+        Profile profile = settings.profileFor(target);
+        String raw = profile.template().raw();
+        String resolved = plugin.service().resolver().resolve(target, raw);
+
+        send(sender, "<gradient:#55ffff:#ffffff><bold>DisplayNames debug</bold></gradient>"
+                + (self ? "" : " <gray>for <white>" + target.getName()));
         line(sender, "Profile", profile.id());
         line(sender, "Resolver", plugin.service().resolver().getClass().getSimpleName());
 
@@ -118,26 +133,42 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         line(sender, "Resolved", escaped(resolved));
         if (raw.equals(resolved)) {
             line(sender, "Verdict", "<red>nothing was substituted <gray>- every placeholder above "
-                    + "is unknown to PlaceholderAPI, so the expansion providing it is not installed. "
-                    + "Try <white>/papi ecloud download Player<gray>, then <white>/papi reload<gray>.");
+                    + "is unknown to PlaceholderAPI, so the expansion providing it is not installed.");
         } else {
             line(sender, "Verdict", "<green>substitution is working <gray>- anything still shown as "
-                    + "%name% below is an expansion you have not installed.");
+                    + "%name% is an expansion you have not installed.");
         }
 
-        // The vanilla plate depends on the team on the board this player is VIEWING, not the main
-        // one, so report exactly that.
+        reportPlate(sender, viewer, target, self);
+    }
+
+    /**
+     * Reports whether the viewer should be seeing the target's vanilla plate, reading the team
+     * from the viewer's own scoreboard because that is the copy their client renders from.
+     */
+    private void reportPlate(CommandSender sender, Player viewer, Player target, boolean self) {
         try {
-            Scoreboard board = player.getScoreboard();
+            Scoreboard board = viewer.getScoreboard();
             boolean main = board.equals(Bukkit.getScoreboardManager().getMainScoreboard());
-            Team team = board.getEntryTeam(player.getName());
-            line(sender, "Your scoreboard", main ? "the main one" : "<yellow>a plugin's own board");
-            line(sender, "Your team", team == null
-                    ? "<yellow>none <gray>(nothing can hide your plate)"
-                    : team.getName() + " -> nametag visibility "
-                            + (team.getOption(Team.Option.NAME_TAG_VISIBILITY) == Team.OptionStatus.NEVER
-                                    ? "<green>NEVER <gray>(plate hidden)"
-                                    : "<red>" + team.getOption(Team.Option.NAME_TAG_VISIBILITY)));
+            line(sender, self ? "Your scoreboard" : "Your scoreboard (the viewer's)",
+                    main ? "the main one" : "<yellow>a plugin's own board");
+
+            Team team = board.getEntryTeam(target.getName());
+            if (team == null) {
+                line(sender, self ? "Your team" : target.getName() + "'s team on it",
+                        "<red>none <gray>- nothing is hiding that plate, so it renders");
+                return;
+            }
+            boolean hidden = team.getOption(Team.Option.NAME_TAG_VISIBILITY) == Team.OptionStatus.NEVER;
+            line(sender, self ? "Your team" : target.getName() + "'s team on it",
+                    team.getName() + " -> " + (hidden
+                            ? "<green>NEVER <gray>(plate should be hidden)"
+                            : "<red>" + team.getOption(Team.Option.NAME_TAG_VISIBILITY)
+                                    + " <gray>(plate renders)"));
+            if (hidden && !self) {
+                line(sender, "Note", "<gray>if you can still see that plate with NEVER set, it is "
+                        + "not vanilla drawing it - another plugin is rendering its own nametag.");
+            }
         } catch (RuntimeException ex) {
             line(sender, "Scoreboard", "<red>could not be read: " + ex.getClass().getSimpleName());
         }
@@ -211,7 +242,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         send(sender, "<gray>/" + label + " <white>refresh [player|*] <dark_gray>- force a re-render");
         send(sender, "<gray>/" + label + " <white>status <dark_gray>- runtime counters");
         send(sender, "<gray>/" + label + " <white>cleanup <dark_gray>- remove stray nametags");
-        send(sender, "<gray>/" + label + " <white>debug <dark_gray>- why placeholders/plates misbehave");
+        send(sender, "<gray>/" + label + " <white>debug [player] <dark_gray>- why placeholders/plates misbehave");
     }
 
     private boolean denied(CommandSender sender, String permission) {
@@ -235,9 +266,9 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase(Locale.ROOT);
-            if (sub.equals("refresh")) {
+            if (sub.equals("refresh") || sub.equals("debug")) {
                 List<String> names = new ArrayList<>();
-                names.add("*");
+                if (sub.equals("refresh")) names.add("*");
                 for (Player online : Bukkit.getOnlinePlayers()) {
                     names.add(online.getName());
                 }

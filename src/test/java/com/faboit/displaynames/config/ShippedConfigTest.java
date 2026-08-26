@@ -91,11 +91,14 @@ class ShippedConfigTest {
     }
 
     @Test
-    void theDefaultTagFacesTheViewerAndSitsAboveTheHead() {
+    void theDefaultTagStaysUprightAboveTheHead() {
         DisplayOptions display = shipped().display();
-        assertEquals(Display.Billboard.CENTER, display.billboard());
+        // VERTICAL, not CENTER: CENTER tilts on both axes, so looking down at a player rotates
+        // the text flat and swings it off the top of their head. VERTICAL only pivots
+        // horizontally, keeping the tag anchored and upright from every angle.
+        assertEquals(Display.Billboard.VERTICAL, display.billboard());
         assertEquals(2.5F - DisplayOptions.DEFAULT_MOUNT_ANCHOR, display.translation().y(), EPSILON);
-        // CENTER always faces the viewer, so the shipped rotation must be a no-op.
+        // The billboard follows the viewer horizontally, so the shipped rotation is a no-op.
         assertTrue(display.leftRotation().equals(0.0F, 0.0F, 0.0F, 1.0F),
                 "the shipped rotation should be identity");
     }
