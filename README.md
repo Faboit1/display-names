@@ -56,6 +56,13 @@ transformation at zero, and the billboard pivots about the text itself.
 the server never moves it. It only looks right paired with `billboard: VERTICAL`, which has no
 pitch for an offset to swing on.
 
+Positioning is done with `teleportAsync`, the only form region threading allows — the
+synchronous `Entity#teleport` throws outright rather than blocking, which on a per-tick follow
+loop means one stack trace per player per tick and a tag stranded where it spawned. If a move
+ever does fail, that tag falls back to riding its player and the cause is logged once for the
+whole server rather than once per tag. A build-time guard (`FoliaApiGuardTest`) fails the build
+if the synchronous form, `BukkitScheduler` or `BukkitRunnable` reappears in main sources.
+
 **Region-local by construction.** Each player's upkeep runs on that player's
 `EntityScheduler`. Under Folia that *is* the thread that owns the player, the tag and the
 placeholder lookups, so no work is ever dispatched to a foreign region and no per-player

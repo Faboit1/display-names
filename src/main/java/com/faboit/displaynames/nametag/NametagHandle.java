@@ -48,6 +48,8 @@ public final class NametagHandle {
     private ScheduledTask task;
     /** Only used by FOLLOW anchoring; a mounted tag is carried by the client for free. */
     private ScheduledTask followTask;
+    /** Set when positioning failed on this server, forcing this tag back to riding its player. */
+    private boolean anchorFallback;
 
     /** Profile and resolved string behind the text currently on the entity. */
     private Profile lastProfile;
@@ -145,13 +147,42 @@ public final class NametagHandle {
      * profile, because this runs every tick and a profile lookup is a permission check.
      */
     private void follow() {
-        if (stopped || !player.isOnline() || player.isDead()) return;
+        if (stopped || anchorFallback || !player.isOnline() || player.isDead()) return;
         TextDisplay current = display;
         DisplayOptions options = activeDisplay;
         if (current == null || options == null) return;
         // A world change is the upkeep pass's job to rebuild; moving it across would be illegal here.
         if (!player.getWorld().getUID().equals(displayWorld)) return;
-        current.teleport(anchorLocation(options, false));
+
+        try {
+            // teleportAsync, never teleport: under region threading the synchronous form throws
+            // outright rather than blocking, which would fire on every tick for every player.
+            current.teleportAsync(anchorLocation(options, false));
+        } catch (Throwable failure) {
+            fallBackToMounting(failure);
+        }
+    }
+
+    /**
+     * Gives up on positioning this tag and lets it ride the player instead.
+     *
+     * <p>This runs every tick, so a failure that merely logged would bury the console and leave
+     * the tag stranded wherever it spawned. Riding the player is the worse-looking option but it
+     * keeps working, and the cause is logged once server-wide.
+     */
+    private void fallBackToMounting(Throwable failure) {
+        anchorFallback = true;
+        if (followTask != null) {
+            followTask.cancel();
+            followTask = null;
+        }
+        service.reportFollowFailure(failure);
+        discardDisplay(); // the next upkeep pass rebuilds it as a passenger
+    }
+
+    /** The anchoring actually in use, which is MOUNT once positioning has failed. */
+    private Anchor anchorFor(Settings settings) {
+        return anchorFallback ? Anchor.MOUNT : settings.anchor();
     }
 
     /**
@@ -300,7 +331,7 @@ public final class NametagHandle {
 
     /** Same world was already established, so the tag is in this player's region and safe to read. */
     private boolean stillAttached(Settings settings, TextDisplay current) {
-        return settings.anchor() == Anchor.MOUNT
+        return anchorFor(settings) == Anchor.MOUNT
                 ? player.getPassengers().contains(current)
                 : current.isValid();
     }
@@ -325,7 +356,7 @@ public final class NametagHandle {
 
     private boolean spawn(Settings settings, DisplayOptions options) {
         World world = player.getWorld();
-        boolean mounted = settings.anchor() == Anchor.MOUNT;
+        boolean mounted = anchorFor(settings) == Anchor.MOUNT;
         Consumer<TextDisplay> initialiser = entity -> {
             options.apply(entity, mounted);
             entity.text(Component.empty());
