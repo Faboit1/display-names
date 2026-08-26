@@ -84,12 +84,12 @@ public final class Settings {
             ConfigurationSection vanilla = visibility.getConfigurationSection("hide-vanilla-nametag");
             this.teamMode = TeamGuard.Mode.parse(vanilla.getString("mode"), TeamGuard.Mode.ADOPT);
             this.teamName = vanilla.getString("team-name", "displaynames");
-            this.teamReassertInterval = Math.max(0L, vanilla.getLong("reassert-interval", 100L));
+            this.teamReassertInterval = Math.max(0L, vanilla.getLong("reassert-interval", 20L));
         } else {
             this.teamMode = visibility.getBoolean("hide-vanilla-nametag", true)
                     ? TeamGuard.Mode.ADOPT : TeamGuard.Mode.NONE;
             this.teamName = "displaynames";
-            this.teamReassertInterval = 100L;
+            this.teamReassertInterval = 20L;
         }
 
         ConfigurationSection performance = section(config, "performance");

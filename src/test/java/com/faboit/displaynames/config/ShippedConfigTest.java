@@ -75,7 +75,7 @@ class ShippedConfigTest {
         Settings settings = shipped();
         assertEquals(TeamGuard.Mode.ADOPT, settings.teamMode());
         assertEquals("displaynames", settings.teamName());
-        assertEquals(100L, settings.teamReassertInterval());
+        assertEquals(20L, settings.teamReassertInterval());
     }
 
     @Test

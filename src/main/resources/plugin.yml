@@ -38,6 +38,3 @@ permissions:
   displaynames.command.debug:
     description: Report why placeholders or vanilla nametags are misbehaving.
     default: op
-  displaynames.hidden:
-    description: Players with this permission never get a nametag.
-    default: false

@@ -61,6 +61,9 @@ public final class TeamGuard {
         }
     }
 
+    /** Consecutive contested sweeps before the console gets told about it. */
+    private static final int CONTESTED_SWEEPS_BEFORE_WARNING = 10;
+
     private final DisplayNames plugin;
     private final AtomicBoolean sweepQueued = new AtomicBoolean();
 
@@ -77,6 +80,9 @@ public final class TeamGuard {
     private volatile int lastAdopted;
     private volatile String lastError;
     private volatile long sweeps;
+    /** Consecutive sweeps that had to switch a team's visibility back off. */
+    private int consecutiveContested;
+    private boolean contestedWarned;
 
     public TeamGuard(DisplayNames plugin) {
         this.plugin = plugin;
@@ -188,11 +194,32 @@ public final class TeamGuard {
             lastAdopted = adopted;
             lastError = null;
             sweeps++;
+            noteContested(adopted);
         } catch (RuntimeException ex) {
             lastError = ex.getClass().getSimpleName() + ": " + ex.getMessage();
             plugin.getLogger().log(Level.WARNING, "Could not hide vanilla nametags. Set "
                     + "visibility.hide-vanilla-nametag.mode to NONE to stop trying.", ex);
         }
+    }
+
+    /**
+     * hide() only reports a change when the team was NOT already hidden, so a run of sweeps that
+     * all had to change something means another plugin is rewriting the same teams underneath us
+     * and plates are flickering back between passes. That is invisible from in-game, so say it.
+     */
+    private void noteContested(int adopted) {
+        if (adopted <= 0) {
+            consecutiveContested = 0;
+            return;
+        }
+        if (++consecutiveContested < CONTESTED_SWEEPS_BEFORE_WARNING || contestedWarned) return;
+
+        contestedWarned = true;
+        plugin.getLogger().warning("Another plugin keeps switching nametag visibility back on for the "
+                + "team(s) DisplayNames adopted - it has been undone on " + consecutiveContested
+                + " sweeps in a row, so vanilla nametags will flicker back between them. Either lower "
+                + "visibility.hide-vanilla-nametag.reassert-interval, or set mode to TEAM so "
+                + "DisplayNames owns the team outright (that overrides tab-list sorting by team).");
     }
 
     /** The main scoreboard plus every distinct one a player is actually looking at. */

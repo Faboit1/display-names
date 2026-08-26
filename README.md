@@ -173,8 +173,6 @@ would otherwise float in the wearer's face in first person),
 `hide-in-spectator`, `hide-while-vanished` (reads the standard
 `vanished` metadata used by Essentials, CMI and SuperVanish) and `disabled-worlds`.
 
-Players with `displaynames.hidden` never get a nametag.
-
 ### Removing the vanilla username plate
 
 `visibility.hide-vanilla-nametag` handles this, and it is worth knowing why it is not a
@@ -194,8 +192,11 @@ timer because those plugins rebuild their scoreboards constantly.
 | `NONE` | Do nothing; keep vanilla nametags. |
 
 `team-name` (max 16 characters) names the team used for players who are in none.
-`reassert-interval` is how often the sweep repeats, in ticks; `0` applies once at startup and on
-join only. Teams adopted from other plugins have their previous visibility restored when
+`reassert-interval` is how often the sweep repeats, in ticks (default `20`, one second); `0`
+applies once at startup and on join only. It has to *win a race* against rank and tab plugins that
+rebuild their teams continuously, so it is deliberately frequent. If a plugin keeps undoing it,
+the console says so after ten contested sweeps in a row, and `/dn status`'s **teams adopted**
+stays non-zero every sweep. Teams adopted from other plugins have their previous visibility restored when
 DisplayNames disables.
 
 If plates are still showing, `/dn status` reports how many scoreboards the last sweep reached,
@@ -216,10 +217,14 @@ how many players it covered, and the last error if there was one.
 
 `displaynames.admin` (default: op) grants all of them.
 
-There is deliberately **no runtime toggle** for showing a tag — every online player gets one.
-A per-player switch is just one more way for a nametag to be silently missing. The only opt-outs
-are server-side and deliberate: the `displaynames.hidden` permission (default `false`, so nobody
-holds it by accident) and `visibility.disabled-worlds`.
+There is deliberately **no per-player opt-out** — not by command, not by permission. Every online
+player in an enabled world gets a tag, and `visibility.disabled-worlds` is the only thing that
+stops it.
+
+An earlier version had a `displaynames.hidden` permission. It sat in the same namespace as the
+command nodes, so any staff rank granted `displaynames.*` — the usual way admin gets set up —
+silently lost its nametag. A switch whose only effect is to make tags disappear is not worth the
+ways it can be tripped by accident.
 
 `/dn debug` is the one to reach for when something looks wrong: it prints the active resolver,
 PlaceholderAPI's version, the raw template beside the resolved string, and the scoreboard and
