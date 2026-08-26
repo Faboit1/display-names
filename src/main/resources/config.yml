@@ -205,10 +205,15 @@ visibility:
     # Max 16 characters.
     team-name: "displaynames"
 
-    # How often (in ticks) to re-apply. Other plugins recreate their teams
-    # constantly, which silently undoes our change. 100 = every 5 seconds.
+    # How often (in ticks) to re-apply. Rank, tab and sidebar plugins rebuild
+    # their teams constantly, and every rebuild silently undoes our change - so
+    # this has to win the race, not just run occasionally. 20 = every second.
     # Set to 0 to apply once at startup and on join only.
-    reassert-interval: 100
+    #
+    # If plates still come back, run /dn status: a non-zero "teams adopted" on
+    # every sweep means another plugin is actively fighting us, and the console
+    # will say so. Switching mode to TEAM ends the fight outright.
+    reassert-interval: 20
 
   # Sneaking and invisibility normally do not hide the tag outright - they drop it
   # back to line-of-sight only, so it stops showing through walls. That is what

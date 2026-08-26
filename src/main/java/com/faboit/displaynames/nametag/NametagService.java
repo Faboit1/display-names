@@ -22,9 +22,6 @@ import java.util.function.IntConsumer;
 /** Owns every {@link NametagHandle} and the shared state they read. */
 public final class NametagService {
 
-    /** Permission that opts a player out of having a nametag entirely. */
-    public static final String HIDDEN_PERMISSION = "displaynames.hidden";
-
     private final DisplayNames plugin;
     private final NamespacedKey markerKey;
     private final TeamGuard teamGuard;
@@ -122,13 +119,16 @@ public final class NametagService {
     }
 
     /**
-     * Every online player gets a nametag unless the server explicitly opted them out through
-     * config or a permission. There is deliberately no runtime toggle: a per-player switch is
-     * one more way for a tag to be silently missing, which is the opposite of what this is for.
+     * Every online player in an enabled world gets a nametag. Full stop.
+     *
+     * <p>There is deliberately no per-player opt-out, by toggle or by permission. An earlier
+     * version had a `displaynames.hidden` node, which sat in the same namespace as the command
+     * nodes - so any staff rank granted `displaynames.*`, the usual way admin is set up, silently
+     * lost its nametag. A switch whose only effect is to make tags disappear is not worth the
+     * ways it can be tripped by accident.
      */
     public boolean isEnabledFor(Player player, Settings settings) {
-        if (settings.worldDisabled(player.getWorld().getName())) return false;
-        return !player.hasPermission(HIDDEN_PERMISSION);
+        return !settings.worldDisabled(player.getWorld().getName());
     }
 
     /**
