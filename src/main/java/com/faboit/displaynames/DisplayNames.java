@@ -1,6 +1,8 @@
 package com.faboit.displaynames;
 
 import com.faboit.displaynames.command.DisplayNamesCommand;
+import com.faboit.displaynames.config.Anchor;
+import com.faboit.displaynames.config.DisplayOptions;
 import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.listener.PlayerListener;
@@ -11,6 +13,7 @@ import com.faboit.displaynames.text.PlaceholderApiResolver;
 import com.faboit.displaynames.text.PlaceholderResolver;
 import com.faboit.displaynames.text.TextRenderer;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Display;
 import org.bukkit.permissions.Permission;
 import org.bukkit.permissions.PermissionDefault;
 import org.bukkit.plugin.PluginManager;
@@ -37,6 +40,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 public final class DisplayNames extends JavaPlugin {
 
     private volatile Settings settings;
+    /** Below this, the mounted drift is small enough that nobody notices it. */
+    private static final float NOTICEABLE_DRIFT = 0.35F;
+
     private NametagService service;
     private boolean placeholders;
 
@@ -61,6 +67,7 @@ public final class DisplayNames extends JavaPlugin {
 
         service.start(settings);
         warnAboutCompetingNametagPlugins(settings);
+        noteAnchorTradeoff(settings);
 
         getLogger().info("Enabled - refresh every " + (settings.autoRefresh()
                 ? settings.refreshInterval() + " ticks" : "manual only")
@@ -82,6 +89,33 @@ public final class DisplayNames extends JavaPlugin {
         this.settings = fresh;
         registerProfilePermissions(fresh);
         service.reload(renderer, fresh);
+    }
+
+    /**
+     * Says once, at startup, which of the two anchoring artefacts this config has chosen.
+     *
+     * <p>Neither mode is wrong and no setting avoids both, so this is not a warning. It is here
+     * because the symptom - a tag sliding off the head when you look steeply down, or a tag
+     * trailing behind a moving player - looks like a bug rather than a trade, and it costs a
+     * round trip every time somebody discovers it from in-game instead of from the log.
+     */
+    private void noteAnchorTradeoff(Settings source) {
+        DisplayOptions display = source.display();
+        if (source.anchor() == Anchor.FOLLOW) {
+            getLogger().info("Anchor FOLLOW: tags sit dead centre above the head at every angle, "
+                    + "but the server moves them, so they trail a moving player. Set display.anchor "
+                    + "to MOUNT if that is the more annoying of the two.");
+            return;
+        }
+
+        float drift = display.mountTranslation().length();
+        if (display.billboard() != Display.Billboard.CENTER || drift < NOTICEABLE_DRIFT) return;
+        getLogger().info(String.format("Anchor MOUNT: tags are carried by the client, so they keep "
+                + "up at any speed, but the %.2f blocks between the mount anchor and offset.y is a "
+                + "transformation - and a CENTER billboard keeps that offset up on the SCREEN, so a "
+                + "tag slides aside when you look steeply down at someone. display.billboard: "
+                + "VERTICAL removes it (the text still faces you square-on), or display.anchor: "
+                + "FOLLOW trades it for a tag that lags in motion.", drift));
     }
 
     /**

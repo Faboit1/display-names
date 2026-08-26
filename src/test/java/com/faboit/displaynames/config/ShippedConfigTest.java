@@ -91,21 +91,34 @@ class ShippedConfigTest {
     }
 
     @Test
-    void theDefaultTagFacesTheViewerAndIsPositionedNotTranslated() {
+    void theDefaultTagRidesItsPlayerSoItKeepsUpInMotion() {
         Settings settings = shipped();
         DisplayOptions display = settings.display();
         assertEquals(Display.Billboard.CENTER, display.billboard());
 
-        // The pair matters. A billboard rotates its transformation with it, so a translated tag
-        // orbits the entity as the viewer's pitch changes. FOLLOW puts the height into the
-        // entity's own position, leaving the transformation at zero so CENTER pivots about the
-        // text itself. CENTER with MOUNT is the combination that drifts off the head.
-        assertEquals(Anchor.FOLLOW, settings.anchor());
+        // Ships MOUNT after both modes were tried on a live server. FOLLOW is geometrically
+        // exact - no transformation, so a CENTER billboard pivots about the text itself and the
+        // tag sits dead centre above the head from every angle - but the server has to move it,
+        // from a position already a tick old, so it visibly trails a moving player. MOUNT hands
+        // the carrying to the client, which is perfect at any speed, and pays for it with the
+        // drift a translated CENTER billboard has at steep angles. Smooth-and-slightly-off beat
+        // exact-and-laggy in practice, which is the call this assertion is pinning down.
+        assertEquals(Anchor.MOUNT, settings.anchor());
         assertEquals(1L, settings.followInterval());
         assertEquals(2.5F, display.offset().y(), EPSILON);
 
         assertTrue(display.leftRotation().equals(0.0F, 0.0F, 0.0F, 1.0F),
                 "the shipped rotation should be identity");
+    }
+
+    @Test
+    void mountingLeavesJustTheHeightAboveTheAnchorAsATransformation() {
+        // The whole cost of MOUNT is this vector: it is what a CENTER billboard swings around.
+        // If it ever grows, the drift grows with it, so the shipped pair is worth pinning.
+        DisplayOptions display = shipped().display();
+        assertEquals(0.0F, display.mountTranslation().x(), EPSILON);
+        assertEquals(2.5F - DisplayOptions.DEFAULT_MOUNT_ANCHOR, display.mountTranslation().y(), EPSILON);
+        assertEquals(0.0F, display.mountTranslation().z(), EPSILON);
     }
 
     @Test

@@ -42,29 +42,40 @@ offset:
 # ---------------------------------------------------------------------------
 display:
 
-  # How the tag is kept above its player.
-  #   FOLLOW - the entity is positioned above the head and carries no
-  #            transformation. A billboard rotates its transformation along with
-  #            it, so ANY translation swings the text around the entity on an arc
-  #            of that translation's length - which is what makes a CENTER
-  #            billboard drift off the head when you look down at someone. Putting
-  #            the height into the position instead leaves the transformation at
-  #            zero, so the billboard pivots about the text itself and it stays
-  #            put from every angle. Costs one entity move per `follow-interval`.
-  #   MOUNT  - the tag rides the player as a passenger. Free (the client carries
-  #            it, the server never moves it), but a passenger sits at vanilla's
-  #            mount anchor - chest height - so the rest of the height has to come
-  #            from a translation, which orbits as described above. Only pair this
-  #            with `billboard: VERTICAL`, which has no pitch to swing on.
-  anchor: FOLLOW
+  # How the tag is kept above its player. The two modes trade against each other
+  # and there is no setting that wins both ways - pick the artefact you mind less.
+  #
+  #   MOUNT  - the tag rides the player as a passenger. The CLIENT carries it, so
+  #            it is glued to the player at any speed - elytra, horse, boat - and
+  #            the server never moves it at all. The catch: a passenger attaches at
+  #            vanilla's mount anchor, chest height, so the remaining height has to
+  #            come from a transformation. A billboard rotates its transformation
+  #            along with it, so that height stays "up on your SCREEN" rather than
+  #            up in the world: look steeply down at someone and the tag slides off
+  #            to one side. Barely visible at normal angles, obvious at 60+ degrees.
+  #            `billboard: VERTICAL` removes it completely - see `billboard` below.
+  #   FOLLOW - the entity is positioned above the head with no transformation at
+  #            all, so a CENTER billboard pivots about the text itself and the tag
+  #            is dead centre above the head from EVERY angle. The catch: the
+  #            server has to move it, once per `follow-interval`, from a position
+  #            that is already a tick behind - so it trails and jitters when the
+  #            player is moving fast.
+  #
+  # Short version: MOUNT is smooth and drifts at steep angles, FOLLOW is exact and
+  # lags in motion. MOUNT + `billboard: VERTICAL` is the combination with neither.
+  anchor: MOUNT
 
   # Ticks between position updates. Only used by FOLLOW. 1 is every tick and
-  # tracks perfectly; raising it trades smoothness for less work.
+  # tracks as closely as the server can; raising it trades smoothness for less work.
   follow-interval: 1
 
   # How the text turns to face people.
   #   CENTER     - faces the viewer on both axes, like a vanilla nametag
-  #   VERTICAL   - turns left/right to follow the viewer, never tilts
+  #   VERTICAL   - turns left/right to follow the viewer, never tilts. Still faces
+  #                you square-on and still reads left-to-right - "vertical" is the
+  #                AXIS it spins around, not the direction of the text. This is the
+  #                one billboard with no pitch, so under `anchor: MOUNT` it is also
+  #                the one where the tag never slides off the head, at any angle.
   #   HORIZONTAL - tilts up/down to follow the viewer, never turns
   #   FIXED      - never moves; points wherever `rotation` says
   billboard: CENTER
