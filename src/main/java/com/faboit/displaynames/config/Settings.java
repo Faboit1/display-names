@@ -57,7 +57,7 @@ public final class Settings {
                 config.getConfigurationSection("offset"), DisplayOptions.defaults(), logger);
 
         ConfigurationSection displaySection = section(config, "display");
-        this.anchor = Anchor.parse(displaySection.getString("anchor"), Anchor.FOLLOW);
+        this.anchor = Anchor.parse(displaySection.getString("anchor"), Anchor.MOUNT);
         this.followInterval = Math.max(1L, displaySection.getLong("follow-interval", 1L));
 
         List<String> defaultLines = config.getStringList("nametag.lines");

@@ -44,24 +44,32 @@ threading, and it has to stay cheap with hundreds of players online.
 one component, not extra entities. Text is only re-sent when the rendered string actually
 changes, so a tag that says the same thing costs nothing to keep saying it.
 
-**Positioned, not mounted — and that is deliberate.** A display's billboard rotates its
-*transformation* along with it, so any translation swings the text around the entity on an arc
-of that translation's length. Riding the player as a passenger pins the entity to vanilla's
-mount anchor (chest height), which forces the rest of the height into a translation — and with
-a `CENTER` billboard that translation orbits, drifting the tag off the head as the viewer looks
-down. So `anchor: FOLLOW` puts the height into the entity's own position and leaves the
-transformation at zero, and the billboard pivots about the text itself.
+**Mounted, not positioned — and that is a trade, not a win.** There is no anchoring that is
+right on both counts, so `display.anchor` picks which artefact you'd rather have.
 
-`anchor: MOUNT` is still available and is genuinely free — the client carries a passenger, so
-the server never moves it. It only looks right paired with `billboard: VERTICAL`, which has no
-pitch for an offset to swing on.
+`MOUNT` (the default) makes the tag a passenger of the player. The *client* carries a passenger,
+so the tag is welded to the player at any speed — sprinting, elytra, horse, boat — and the server
+never moves it at all. The cost is geometric: a passenger attaches at vanilla's mount anchor
+(chest height, `height × 0.75` = 1.35), so the remaining height has to be a transformation, and a
+display's billboard rotates its *transformation* along with it. That keeps the offset pointing up
+on the **screen** rather than up in the **world**, so looking steeply down at someone slides their
+tag off to one side. Below about 40° of pitch you will not notice; past 60° you will.
+`billboard: VERTICAL` removes it outright — that billboard has no pitch for an offset to swing on,
+and despite the name the text still faces you square-on and still reads left-to-right ("vertical"
+is the axis it spins around).
 
-Positioning is done with `teleportAsync`, the only form region threading allows — the
-synchronous `Entity#teleport` throws outright rather than blocking, which on a per-tick follow
-loop means one stack trace per player per tick and a tag stranded where it spawned. If a move
-ever does fail, that tag falls back to riding its player and the cause is logged once for the
-whole server rather than once per tag. A build-time guard (`FoliaApiGuardTest`) fails the build
-if the synchronous form, `BukkitScheduler` or `BukkitRunnable` reappears in main sources.
+`FOLLOW` is the geometrically exact one: the entity is *positioned* above the head with the
+transformation left at zero, so a `CENTER` billboard pivots about the text itself and the tag is
+dead centre above the head from every angle. It pays for that by having the server move it, once
+per `follow-interval`, from a player position that is already a tick old — so it trails and
+jitters when the player is moving. Fine standing still, visibly wrong on an elytra.
+
+Positioning uses `teleportAsync`, the only form region threading allows — the synchronous
+`Entity#teleport` throws rather than blocking, which on a per-tick follow loop means one stack
+trace per player per tick and a tag stranded where it spawned. If a move ever does fail, that tag
+falls back to riding its player and the cause is logged once for the whole server. A build-time
+guard (`FoliaApiGuardTest`) fails the build if the synchronous form, `BukkitScheduler` or
+`BukkitRunnable` reappears in main sources.
 
 **Region-local by construction.** Each player's upkeep runs on that player's
 `EntityScheduler`. Under Folia that *is* the thread that owns the player, the tag and the
@@ -147,7 +155,7 @@ The `display` section exposes every property a `TextDisplay` has:
 
 | Key | |
 |---|---|
-| `anchor` | `FOLLOW` (positioned above the head) or `MOUNT` (rides the player) — see above |
+| `anchor` | `MOUNT` (rides the player: smooth, drifts at steep angles) or `FOLLOW` (positioned above the head: exact, lags in motion) — see above |
 | `follow-interval` | ticks between position updates; `FOLLOW` only |
 | `billboard` | `CENTER` / `VERTICAL` / `HORIZONTAL` / `FIXED` — which axes turn to face the viewer |
 | `rotation` | `yaw` / `pitch` / `roll` in degrees, for the axes the billboard does *not* follow the viewer on |
