@@ -31,7 +31,9 @@ public final class DisplayOptions {
     public static final float DEFAULT_MOUNT_ANCHOR = 1.35F;
 
     private final Display.Billboard billboard;
-    private final Vector3f translation;
+    /** Raw offset from the player's feet, before any anchoring maths. */
+    private final Vector3f offset;
+    private final float mountAnchor;
     private final Vector3f scale;
     private final Quaternionf leftRotation;
     private final Quaternionf rightRotation;
@@ -57,7 +59,8 @@ public final class DisplayOptions {
 
     private DisplayOptions(Builder builder) {
         this.billboard = builder.billboard;
-        this.translation = builder.translation;
+        this.offset = builder.offset;
+        this.mountAnchor = builder.mountAnchor;
         this.scale = builder.scale;
         this.leftRotation = builder.leftRotation;
         this.rightRotation = builder.rightRotation;
@@ -94,7 +97,7 @@ public final class DisplayOptions {
         if (display == null && offset == null) return parent;
 
         Builder builder = parent.toBuilder();
-        if (offset != null) builder.translation = readTranslation(offset, parent.translation);
+        if (offset != null) readOffset(offset, builder);
         if (display == null) return builder.build();
 
         builder.billboard = readEnum(Display.Billboard.class, display, "billboard", parent.billboard, logger);
@@ -103,7 +106,7 @@ public final class DisplayOptions {
 
         // A nested offset inside a profile's display block overrides the sibling one.
         if (display.isConfigurationSection("offset")) {
-            builder.translation = readTranslation(display.getConfigurationSection("offset"), builder.translation);
+            readOffset(display.getConfigurationSection("offset"), builder);
         }
 
         builder.scale = readScale(display, parent.scale, logger);
@@ -150,8 +153,13 @@ public final class DisplayOptions {
         return builder.build();
     }
 
-    /** Configures a freshly created entity, from inside the spawn consumer. */
-    public void apply(TextDisplay entity) {
+    /**
+     * Configures a freshly created entity, from inside the spawn consumer.
+     *
+     * @param mounted whether the entity rides the player, which decides where the height has to
+     *                come from - see {@link #mountTranslation()}
+     */
+    public void apply(TextDisplay entity, boolean mounted) {
         entity.setBillboard(billboard);
         entity.setBackgroundColor(background);
         entity.setTextOpacity(textOpacity);
@@ -170,7 +178,8 @@ public final class DisplayOptions {
         entity.setInterpolationDelay(interpolationDelay);
         entity.setInterpolationDuration(interpolationDuration);
         entity.setTeleportDuration(teleportDuration);
-        entity.setTransformation(new Transformation(translation, leftRotation, scale, rightRotation));
+        entity.setTransformation(new Transformation(
+                mounted ? mountTranslation() : new Vector3f(), leftRotation, scale, rightRotation));
 
         // Never written to region files; rebuilt on join.
         entity.setPersistent(false);
@@ -187,11 +196,29 @@ public final class DisplayOptions {
         return billboard;
     }
 
-    // Package-private views of the parsed values, for tests.
-
-    Vector3f translation() {
-        return translation;
+    /** Raw offset from the player's feet, used to position a followed entity directly. */
+    public Vector3f offset() {
+        return offset;
     }
+
+    /**
+     * Height carried by the transformation when the entity rides the player.
+     *
+     * <p>A passenger sits at vanilla's mount anchor, so the rest of the height has to come from
+     * the transformation - and a billboard rotates its transformation with it, which swings the
+     * text around the entity on an arc of this vector's length. That is why FOLLOW anchoring,
+     * which positions the entity itself and leaves this at zero, is the default.
+     */
+    public Vector3f mountTranslation() {
+        return new Vector3f(offset.x(), offset.y() - mountAnchor, offset.z());
+    }
+
+    /** Kept for tests and diagnostics: the translation a mounted entity would carry. */
+    Vector3f translation() {
+        return mountTranslation();
+    }
+
+    // Package-private views of the parsed values, for tests.
 
     Vector3f scale() {
         return scale;
@@ -242,18 +269,19 @@ public final class DisplayOptions {
         return shadowRadius;
     }
 
-    int teleportDuration() {
+    /** Configured teleport interpolation; 0 means the entity snaps. */
+    public int teleportDuration() {
         return teleportDuration;
     }
 
     // ---------------------------------------------------------------- parsing
 
-    private static Vector3f readTranslation(ConfigurationSection offset, Vector3f parent) {
-        float anchor = (float) offset.getDouble("mount-anchor", DEFAULT_MOUNT_ANCHOR);
-        return new Vector3f(
-                (float) offset.getDouble("x", parent.x()),
-                (float) offset.getDouble("y", parent.y() + DEFAULT_MOUNT_ANCHOR) - anchor,
-                (float) offset.getDouble("z", parent.z()));
+    private static void readOffset(ConfigurationSection offset, Builder builder) {
+        builder.mountAnchor = (float) offset.getDouble("mount-anchor", builder.mountAnchor);
+        builder.offset = new Vector3f(
+                (float) offset.getDouble("x", builder.offset.x()),
+                (float) offset.getDouble("y", builder.offset.y()),
+                (float) offset.getDouble("z", builder.offset.z()));
     }
 
     private static Vector3f readScale(ConfigurationSection display, Vector3f parent, Logger logger) {
@@ -418,7 +446,8 @@ public final class DisplayOptions {
     private Builder toBuilder() {
         Builder builder = new Builder();
         builder.billboard = billboard;
-        builder.translation = translation;
+        builder.offset = offset;
+        builder.mountAnchor = mountAnchor;
         builder.scale = scale;
         builder.leftRotation = leftRotation;
         builder.rightRotation = rightRotation;
@@ -442,8 +471,9 @@ public final class DisplayOptions {
     }
 
     private static final class Builder {
-        private Display.Billboard billboard = Display.Billboard.VERTICAL;
-        private Vector3f translation = new Vector3f(0.0F, 2.5F - DEFAULT_MOUNT_ANCHOR, 0.0F);
+        private Display.Billboard billboard = Display.Billboard.CENTER;
+        private Vector3f offset = new Vector3f(0.0F, 2.5F, 0.0F);
+        private float mountAnchor = DEFAULT_MOUNT_ANCHOR;
         private Vector3f scale = new Vector3f(1.0F, 1.0F, 1.0F);
         private Quaternionf leftRotation = new Quaternionf();
         private Quaternionf rightRotation = new Quaternionf();
