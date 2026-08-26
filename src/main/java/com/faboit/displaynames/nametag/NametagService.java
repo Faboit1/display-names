@@ -15,9 +15,11 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.IntConsumer;
+import java.util.logging.Level;
 
 /** Owns every {@link NametagHandle} and the shared state they read. */
 public final class NametagService {
@@ -27,6 +29,8 @@ public final class NametagService {
     private final TeamGuard teamGuard;
 
     private final Map<UUID, NametagHandle> handles = new ConcurrentHashMap<>();
+
+    private final AtomicBoolean followFailureLogged = new AtomicBoolean();
 
     private final LongAdder updates = new LongAdder();
     private final LongAdder skipped = new LongAdder();
@@ -129,6 +133,20 @@ public final class NametagService {
      */
     public boolean isEnabledFor(Player player, Settings settings) {
         return !settings.worldDisabled(player.getWorld().getName());
+    }
+
+    /**
+     * Reports, once for the whole server, that positioning a nametag failed.
+     *
+     * <p>Once per handle would mean one stack trace per online player for the same cause.
+     */
+    void reportFollowFailure(Throwable failure) {
+        if (!followFailureLogged.compareAndSet(false, true)) return;
+        plugin.getLogger().log(Level.WARNING, "Could not move a nametag into position, so nametags "
+                + "are falling back to riding their player. They still work, but a passenger sits at "
+                + "chest height and the rest of the offset becomes a transformation, which a CENTER "
+                + "billboard swings around - set display.billboard to VERTICAL to stop that, or "
+                + "display.anchor to MOUNT to make the fallback the deliberate choice.", failure);
     }
 
     /**
