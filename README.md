@@ -40,11 +40,21 @@ Drop the jar in `plugins/` and restart. `config.yml` is written on first start.
 The design is driven by two constraints: it has to be correct under Folia's regionised
 threading, and it has to stay cheap with hundreds of players online.
 
-**One mounted entity per player.** The tag is a single `TextDisplay` added as a *passenger*
-of the player. The client interpolates a passenger's position itself, so the server never
-teleports the tag and never sends a movement packet for it — the only packet a nametag ever
-costs after spawning is a metadata update when its text actually changes. Extra lines are
-newlines inside one component, not extra entities.
+**One entity per player.** The tag is a single `TextDisplay`; extra lines are newlines inside
+one component, not extra entities. Text is only re-sent when the rendered string actually
+changes, so a tag that says the same thing costs nothing to keep saying it.
+
+**Positioned, not mounted — and that is deliberate.** A display's billboard rotates its
+*transformation* along with it, so any translation swings the text around the entity on an arc
+of that translation's length. Riding the player as a passenger pins the entity to vanilla's
+mount anchor (chest height), which forces the rest of the height into a translation — and with
+a `CENTER` billboard that translation orbits, drifting the tag off the head as the viewer looks
+down. So `anchor: FOLLOW` puts the height into the entity's own position and leaves the
+transformation at zero, and the billboard pivots about the text itself.
+
+`anchor: MOUNT` is still available and is genuinely free — the client carries a passenger, so
+the server never moves it. It only looks right paired with `billboard: VERTICAL`, which has no
+pitch for an offset to swing on.
 
 **Region-local by construction.** Each player's upkeep runs on that player's
 `EntityScheduler`. Under Folia that *is* the thread that owns the player, the tag and the
@@ -130,6 +140,8 @@ The `display` section exposes every property a `TextDisplay` has:
 
 | Key | |
 |---|---|
+| `anchor` | `FOLLOW` (positioned above the head) or `MOUNT` (rides the player) — see above |
+| `follow-interval` | ticks between position updates; `FOLLOW` only |
 | `billboard` | `CENTER` / `VERTICAL` / `HORIZONTAL` / `FIXED` — which axes turn to face the viewer |
 | `rotation` | `yaw` / `pitch` / `roll` in degrees, for the axes the billboard does *not* follow the viewer on |
 | `scale` | one number, or a `x`/`y`/`z` block |

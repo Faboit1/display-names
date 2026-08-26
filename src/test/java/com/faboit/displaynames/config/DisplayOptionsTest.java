@@ -70,14 +70,27 @@ class DisplayOptionsTest {
     }
 
     @Test
-    void offsetIsMeasuredFromTheFeetAndCompensatesTheMountAnchor() {
-        DisplayOptions options = load("""
+    void theOffsetIsKeptRawForPositioningAFollowedTag() {
+        // FOLLOW puts this straight into the entity's position, so it must survive unmodified.
+        Vector3f offset = load("""
                 offset:
                   x: 1.0
                   y: 2.5
                   z: -1.0
-                """);
-        Vector3f translation = options.translation();
+                """).offset();
+        assertEquals(1.0F, offset.x(), EPSILON);
+        assertEquals(2.5F, offset.y(), EPSILON);
+        assertEquals(-1.0F, offset.z(), EPSILON);
+    }
+
+    @Test
+    void mountingCompensatesTheAnchorBecauseAPassengerStartsAtChestHeight() {
+        Vector3f translation = load("""
+                offset:
+                  x: 1.0
+                  y: 2.5
+                  z: -1.0
+                """).mountTranslation();
         assertEquals(1.0F, translation.x(), EPSILON);
         assertEquals(2.5F - DisplayOptions.DEFAULT_MOUNT_ANCHOR, translation.y(), EPSILON);
         assertEquals(-1.0F, translation.z(), EPSILON);
@@ -201,7 +214,7 @@ class DisplayOptionsTest {
                 display:
                   billboard: sideways
                 """);
-        assertEquals(Display.Billboard.VERTICAL, options.billboard());
+        assertEquals(Display.Billboard.CENTER, options.billboard());
     }
 
     @Test
@@ -299,9 +312,7 @@ class DisplayOptionsTest {
     @Test
     void defaultsAreTheDocumentedOnes() {
         DisplayOptions defaults = DisplayOptions.defaults();
-        // VERTICAL rather than CENTER: CENTER tilts on both axes, so viewing a player from
-        // above rotates the text flat and swings it off the top of their head.
-        assertEquals(Display.Billboard.VERTICAL, defaults.billboard());
+        assertEquals(Display.Billboard.CENTER, defaults.billboard());
         assertEquals(TextDisplay.TextAlignment.CENTER, defaults.alignment());
         assertEquals(200, defaults.lineWidth());
         assertEquals(1.0F, defaults.viewRange(), EPSILON);

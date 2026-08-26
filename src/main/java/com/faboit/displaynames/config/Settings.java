@@ -29,6 +29,8 @@ public final class Settings {
     private final int refreshInterval;
     private final boolean staggerUpdates;
     private final DisplayOptions display;
+    private final Anchor anchor;
+    private final long followInterval;
     private final Profile defaultProfile;
     private final List<Profile> profiles;
     private final Set<String> disabledWorlds;
@@ -53,6 +55,10 @@ public final class Settings {
         this.refreshInterval = Math.max(0, config.getInt("refresh-interval", 10));
         this.display = DisplayOptions.load(config.getConfigurationSection("display"),
                 config.getConfigurationSection("offset"), DisplayOptions.defaults(), logger);
+
+        ConfigurationSection displaySection = section(config, "display");
+        this.anchor = Anchor.parse(displaySection.getString("anchor"), Anchor.FOLLOW);
+        this.followInterval = Math.max(1L, displaySection.getLong("follow-interval", 1L));
 
         List<String> defaultLines = config.getStringList("nametag.lines");
         if (defaultLines.isEmpty()) {
@@ -199,6 +205,16 @@ public final class Settings {
 
     public DisplayOptions display() {
         return display;
+    }
+
+    /** How the tag is kept above its player. */
+    public Anchor anchor() {
+        return anchor;
+    }
+
+    /** Ticks between position updates; only used by {@link Anchor#FOLLOW}. */
+    public long followInterval() {
+        return followInterval;
     }
 
     public List<Profile> profiles() {

@@ -1,6 +1,7 @@
 package com.faboit.displaynames.nametag;
 
 import com.faboit.displaynames.DisplayNames;
+import com.faboit.displaynames.config.Anchor;
 import com.faboit.displaynames.config.DisplayOptions;
 import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
@@ -15,6 +16,7 @@ import org.bukkit.entity.TextDisplay;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.potion.PotionEffectType;
+import org.joml.Vector3f;
 
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -44,6 +46,8 @@ public final class NametagHandle {
     /** see-through state currently on the entity, so it is only written when it changes. */
     private boolean seeThroughApplied;
     private ScheduledTask task;
+    /** Only used by FOLLOW anchoring; a mounted tag is carried by the client for free. */
+    private ScheduledTask followTask;
 
     /** Profile and resolved string behind the text currently on the entity. */
     private Profile lastProfile;
@@ -79,16 +83,20 @@ public final class NametagHandle {
             delay += Math.floorMod(player.getUniqueId().hashCode(), period);
         }
         task = player.getScheduler().runAtFixedRate(plugin, ignored -> runTick(), this::onRetired, delay, period);
-        if (task == null) onRetired(); // player left between join and scheduling
+        if (task == null) {
+            onRetired(); // player left between join and scheduling
+            return;
+        }
+        if (settings.anchor() == Anchor.FOLLOW) {
+            followTask = player.getScheduler().runAtFixedRate(plugin, ignored -> follow(), this::onRetired,
+                    1L, Math.max(1L, settings.followInterval()));
+        }
     }
 
     /** Cancels upkeep and removes the entity. Must run on the player's region thread. */
     void stop() {
         stopped = true;
-        if (task != null) {
-            task.cancel();
-            task = null;
-        }
+        cancelTasks();
         discardDisplay();
         unindex();
     }
@@ -96,10 +104,7 @@ public final class NametagHandle {
     /** Best-effort teardown used during plugin shutdown, where schedulers may no longer run. */
     void stopImmediately() {
         stopped = true;
-        if (task != null) {
-            task.cancel();
-            task = null;
-        }
+        cancelTasks();
         TextDisplay current = display;
         display = null;
         displayWorld = null;
@@ -118,7 +123,35 @@ public final class NametagHandle {
     private void onRetired() {
         stopped = true;
         task = null;
+        followTask = null;
         unindex();
+    }
+
+    private void cancelTasks() {
+        if (task != null) {
+            task.cancel();
+            task = null;
+        }
+        if (followTask != null) {
+            followTask.cancel();
+            followTask = null;
+        }
+    }
+
+    /**
+     * Keeps a followed tag on top of its player.
+     *
+     * <p>Reads the offset from the live entity's own options rather than re-resolving the
+     * profile, because this runs every tick and a profile lookup is a permission check.
+     */
+    private void follow() {
+        if (stopped || !player.isOnline() || player.isDead()) return;
+        TextDisplay current = display;
+        DisplayOptions options = activeDisplay;
+        if (current == null || options == null) return;
+        // A world change is the upkeep pass's job to rebuild; moving it across would be illegal here.
+        if (!player.getWorld().getUID().equals(displayWorld)) return;
+        current.teleport(anchorLocation(options, false));
     }
 
     /**
@@ -257,7 +290,7 @@ public final class NametagHandle {
             // missing passenger.
             if (activeDisplay == options
                     && player.getWorld().getUID().equals(displayWorld)
-                    && player.getPassengers().contains(current)) {
+                    && stillAttached(settings, current)) {
                 return true;
             }
             discardDisplay();
@@ -265,21 +298,44 @@ public final class NametagHandle {
         return spawn(settings, options);
     }
 
+    /** Same world was already established, so the tag is in this player's region and safe to read. */
+    private boolean stillAttached(Settings settings, TextDisplay current) {
+        return settings.anchor() == Anchor.MOUNT
+                ? player.getPassengers().contains(current)
+                : current.isValid();
+    }
+
+    /**
+     * Where the entity itself sits.
+     *
+     * <p>FOLLOW puts the whole offset into the position so the transformation stays at zero; a
+     * billboard rotates its transformation with it, so any translation would swing the text
+     * around the entity on an arc of that translation's length.
+     */
+    private Location anchorLocation(DisplayOptions options, boolean mounted) {
+        Location origin = player.getLocation();
+        origin.setYaw(0.0F);
+        origin.setPitch(0.0F);
+        if (!mounted) {
+            Vector3f offset = options.offset();
+            origin.add(offset.x(), offset.y(), offset.z());
+        }
+        return origin;
+    }
+
     private boolean spawn(Settings settings, DisplayOptions options) {
         World world = player.getWorld();
+        boolean mounted = settings.anchor() == Anchor.MOUNT;
         Consumer<TextDisplay> initialiser = entity -> {
-            options.apply(entity);
+            options.apply(entity, mounted);
             entity.text(Component.empty());
             entity.getPersistentDataContainer().set(service.markerKey(), PersistentDataType.BYTE, MARKER_VALUE);
         };
 
-        // Spawned facing due south rather than at the player's own yaw and pitch. An entity's
-        // rotation is part of what a non-CENTER billboard renders with, so inheriting the
-        // player's would freeze every tag at whatever direction its owner happened to be facing
-        // when it was created, and compose that on top of the configured rotation.
-        Location origin = player.getLocation();
-        origin.setYaw(0.0F);
-        origin.setPitch(0.0F);
+        // anchorLocation zeroes the yaw and pitch: an entity's rotation is part of what a
+        // non-CENTER billboard renders with, so inheriting the player's would freeze every tag at
+        // whatever direction its owner happened to be facing when it was created.
+        Location origin = anchorLocation(options, mounted);
 
         TextDisplay spawned;
         try {
@@ -290,9 +346,13 @@ public final class NametagHandle {
             return false;
         }
 
-        if (!player.addPassenger(spawned)) {
+        if (mounted && !player.addPassenger(spawned)) {
             spawned.remove();
             return false; // retried on the next pass
+        }
+        if (!mounted && options.teleportDuration() == 0) {
+            // Interpolate between position updates so a followed tag glides rather than steps.
+            spawned.setTeleportDuration((int) Math.min(59L, settings.followInterval()));
         }
         if (settings.hideFromSelf()) player.hideEntity(plugin, spawned);
 
