@@ -92,14 +92,34 @@ class ShippedConfigTest {
 
     @Test
     void tagsAreVisibleThroughTerrainByDefault() {
-        // Requested behaviour: readable underground, with sneaking and invisibility dropping
-        // back to line-of-sight only rather than hiding the tag outright.
+        // Requested behaviour: readable underground, with sneaking dropping back to
+        // line-of-sight only rather than hiding the tag outright.
         Settings settings = shipped();
         assertTrue(settings.display().seeThrough());
         assertFalse(settings.seeThroughWhileSneaking());
         assertFalse(settings.seeThroughWhileInvisible());
         assertFalse(settings.hideWhileSneaking());
-        assertFalse(settings.hideWhileInvisible());
+    }
+
+    @Test
+    void invisibilityHidesTheTagOutright() {
+        // Vanilla hides the username plate of an invisible player. A tag that stays up is a
+        // custom nametag giving away exactly what the game itself hides, so this one is not a
+        // taste setting - it ships on, and it must stay on for a config that omits the key.
+        assertTrue(shipped().hideWhileInvisible());
+
+        YamlConfiguration bare = new YamlConfiguration();
+        try {
+            bare.loadFromString("""
+                    nametag:
+                      lines:
+                        - "<white>%player_name%"
+                    """);
+        } catch (Exception ex) {
+            throw new AssertionError("fixture is not valid YAML", ex);
+        }
+        assertTrue(Settings.load(bare, Settings.createRenderer(bare, LOGGER), LOGGER)
+                .hideWhileInvisible());
     }
 
     @Test

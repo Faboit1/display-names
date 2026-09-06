@@ -456,8 +456,15 @@ public final class NametagHandle {
         seeThroughApplied = wanted;
     }
 
+    /**
+     * Invisible by potion, or by a plugin setting the entity flag directly.
+     *
+     * <p>Both are needed: a splash potion only ever shows up as an effect, while vanish and
+     * cosmetic plugins reach for {@code setInvisible} and never touch the player's effects.
+     * The flag is a bit test and the effect list is a map lookup, so the cheap one goes first.
+     */
     private boolean isInvisible() {
-        return player.hasPotionEffect(PotionEffectType.INVISIBILITY);
+        return player.isInvisible() || player.hasPotionEffect(PotionEffectType.INVISIBILITY);
     }
 
     private boolean isVanished() {

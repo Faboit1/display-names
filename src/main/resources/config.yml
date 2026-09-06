@@ -330,16 +330,24 @@ visibility:
     # will say so. Switching mode to TEAM ends the fight outright.
     reassert-interval: 20
 
-  # Sneaking and invisibility normally do not hide the tag outright - they drop it
-  # back to line-of-sight only, so it stops showing through walls. That is what
-  # these two control; set them to true to keep tags see-through even then.
+  # Sneaking does not hide the tag outright - it drops it back to line-of-sight
+  # only, so it stops showing through walls. Set this to true to keep tags
+  # see-through even while sneaking.
   see-through-while-sneaking: false
+
+  # Only used when hide-while-invisible is false, since a hidden tag cannot
+  # show through anything.
   see-through-while-invisible: false
 
-  # Hide the tag ENTIRELY while sneaking / invisible, rather than just taking away
-  # see-through. Leave these false to get the behaviour described above.
+  # Hide the tag ENTIRELY while sneaking / invisible.
+  #
+  # Invisibility is ON by default: vanilla hides the username plate of an
+  # invisible player, so a tag left up is a custom nametag giving away what the
+  # game itself hides. Covers both the potion effect (drunk or splashed) and
+  # plugins that set the invisibility flag directly. Set it to false to keep
+  # tags up regardless, in which case see-through-while-invisible applies again.
   hide-while-sneaking: false
-  hide-while-invisible: false
+  hide-while-invisible: true
 
   # Hide the tag in spectator mode.
   hide-in-spectator: true

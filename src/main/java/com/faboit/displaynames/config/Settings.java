@@ -87,9 +87,12 @@ public final class Settings {
         ConfigurationSection visibility = section(config, "visibility");
         this.hideFromSelf = visibility.getBoolean("hide-from-self", true);
         this.hideWhileSneaking = visibility.getBoolean("hide-while-sneaking", false);
-        this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", false);
-        // Sneaking and invisibility drop the tag back to line-of-sight only rather than hiding
-        // it, which is what vanilla nametags do and what the see-through default trades away.
+        // On by default, unlike sneaking: vanilla hides the username plate of an invisible
+        // player outright, so leaving the tag up is the one case where a custom nametag gives
+        // away something the game itself hides.
+        this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", true);
+        // Sneaking drops the tag back to line-of-sight only rather than hiding it, which is what
+        // vanilla nametags do and what the see-through default trades away.
         this.seeThroughWhileSneaking = visibility.getBoolean("see-through-while-sneaking", false);
         this.seeThroughWhileInvisible = visibility.getBoolean("see-through-while-invisible", false);
         this.hideInSpectator = visibility.getBoolean("hide-in-spectator", true);

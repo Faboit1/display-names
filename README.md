@@ -281,10 +281,16 @@ appearance is baked in when the entity is created.
 ### Hiding
 
 Tags are **see-through by default**, so they stay readable underground and behind walls.
-Sneaking or drinking an invisibility potion drops them back to line-of-sight only rather than
-hiding them outright — `see-through-while-sneaking` and `see-through-while-invisible` control
-that, and `hide-while-sneaking` / `hide-while-invisible` hide the tag entirely instead. Because
-see-through is a live entity property, switching it is a metadata flip, not a respawn.
+Sneaking drops them back to line-of-sight only rather than hiding them outright —
+`see-through-while-sneaking` controls that, and `hide-while-sneaking` hides the tag entirely
+instead. Because see-through is a live entity property, switching it is a metadata flip, not a
+respawn.
+
+**Invisibility hides the tag outright**, and that one ships on: vanilla hides the username plate
+of an invisible player, so a tag left floating there gives away exactly what the game itself
+hides. Both routes count — the potion effect, whether drunk or splashed, and plugins that set
+the invisibility flag directly. `hide-while-invisible: false` restores the old behaviour, in
+which case `see-through-while-invisible` applies again.
 
 `visibility` controls the rest: `hide-from-self` (on by default — the tag
 would otherwise float in the wearer's face in first person),
