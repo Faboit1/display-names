@@ -5,7 +5,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 import java.util.Locale;
-import java.util.function.Function;
 
 /**
  * A small set of player placeholders resolved without PlaceholderAPI.
@@ -20,44 +19,7 @@ public final class BuiltinPlaceholders implements PlaceholderResolver {
 
     @Override
     public String resolve(Player player, String text) {
-        return replace(text, token -> valueOf(player, token));
-    }
-
-    /**
-     * Substitutes every {@code %token%} the lookup recognises, leaving the rest untouched.
-     *
-     * <p>Split out from {@link #resolve} so the index arithmetic can be tested without a server.
-     *
-     * @param lookup returns the replacement, or {@code null} for a token it does not handle
-     */
-    static String replace(String text, Function<String, String> lookup) {
-        if (text == null || text.indexOf('%') < 0) return text;
-
-        StringBuilder out = null;
-        int copied = 0;
-        int scan = 0;
-
-        while (true) {
-            int open = text.indexOf('%', scan);
-            if (open < 0) break;
-            int close = text.indexOf('%', open + 1);
-            if (close < 0) break;
-
-            String value = lookup.apply(text.substring(open + 1, close));
-            if (value == null) {
-                // Not one of ours. Resume at the closing marker, which may itself open the
-                // next placeholder in a run like %a%%b%.
-                scan = close;
-                continue;
-            }
-            if (out == null) out = new StringBuilder(text.length() + 16);
-            out.append(text, copied, open).append(value);
-            copied = close + 1;
-            scan = copied;
-        }
-
-        if (out == null) return text;
-        return out.append(text, copied, text.length()).toString();
+        return Placeholders.replace(text, token -> valueOf(player, token));
     }
 
     /** @return the replacement, or {@code null} when the token is not one we know */

@@ -174,13 +174,78 @@ display:
     teleport-duration: 0   # 0-59
 
 # ---------------------------------------------------------------------------
-#  Per-permission formats
+#  Conditions
 # ---------------------------------------------------------------------------
-#  The first profile (highest priority) whose permission the player has wins.
-#  Players matching nothing get `nametag.lines` above.
+#  Named tests you can point a profile, a line of text or the hide switch at.
+#  The grammar is TAB's, so conditions copied from a TAB config work here.
+#
+#  A condition is a list of checks. `type: AND` (the default) needs all of
+#  them to pass, `type: OR` needs one. A check compares two sides, and either
+#  side may be a placeholder:
+#
+#      "%vault_eco_balance% >= 1000"
+#      "%player_world% = world_nether"
+#
+#  Operators:
+#      >=  >   <=  <        numeric; a side that is not a number never matches
+#      =   !=               equals / does not equal
+#      <-  !<-              contains / does not contain
+#      |-  !|-              starts with / does not start with
+#      -|  !-|              ends with / does not end with
+#      permission:<node>    holds the permission
+#      !permission:<node>   does not hold it
+#
+#  Text comparisons ignore case here (TAB's are case-sensitive) - so
+#  `%player_world%=WORLD` matches `world`. A check that is nothing but
+#  `%placeholder%` passes when it resolves to "true", and `!%placeholder%` is
+#  its opposite.
+#
+#  Instead of a list you can write the whole thing on one line, joining checks
+#  with `;` for AND or `|` for OR:
+#
+#      condition: "%essentials_afk%=true;permission:group.staff"
+#
+#  Anywhere in `lines` - and inside a condition's own output - the token
+#  %condition:name% is replaced by that condition's `true:` or `false:` text
+#  for the player being rendered. Conditions may reference each other; a loop
+#  between them is detected and dropped at startup rather than at runtime.
+#
+#  Conditions are only evaluated for players a profile or a line actually
+#  needs them for, so an unused one costs nothing.
+conditions: {}
+#conditions:
+#  is_afk:
+#    conditions:
+#      - "%essentials_afk%=true"
+#    true: "<gray>[AFK] "
+#    false: ""
+#  low_health:
+#    type: OR
+#    conditions:
+#      - "%player_health% < 6"
+#      - "%player_is_on_fire%"
+#    true: "<red>!"
+#    false: ""
+#  # Short forms: a bare list is an AND, a bare string is a single check.
+#  in_the_nether:
+#    - "%player_world%=world_nether"
+#  is_staff: "permission:displaynames.staff"
+
+# ---------------------------------------------------------------------------
+#  Per-player formats and settings
+# ---------------------------------------------------------------------------
+#  The first profile (highest priority) the player matches wins. Players
+#  matching nothing get `nametag.lines` above.
+#
+#  A profile is gated by a `permission`, a `condition`, or both - it needs at
+#  least one, and when it has both, both must pass. `condition` takes the name
+#  of a condition declared above, `%condition:name%`, or an inline expression.
 #
 #  A profile may also override `offset` and any part of `display`. Anything it
-#  does not mention is inherited from the global settings above.
+#  does not mention is inherited from the global settings above. `lines` are
+#  optional too: a profile with none keeps `nametag.lines` and exists purely to
+#  change the appearance - a bigger tag while a player is in combat, a higher
+#  one while they are riding something.
 #
 #  Every profile permission is registered with a default of `false`, so nobody
 #  holds one until you grant it - operators included. Grant them in LuckPerms
@@ -204,6 +269,20 @@ profiles: {}
 #    priority: 50
 #    lines:
 #      - "<gradient:#55ffff:#ffffff>%player_name%</gradient>"
+#  # Settings only: no lines, so `nametag.lines` is still what gets rendered.
+#  combat:
+#    condition: "%combat_time% > 0"
+#    priority: 200
+#    display:
+#      scale: 1.25
+#      glow-color: "#ff5555"
+#  # Both gates: staff, and only while they are AFK.
+#  staff_afk:
+#    permission: "displaynames.profile.staff"
+#    condition: is_afk
+#    priority: 150
+#    lines:
+#      - "<gray>%condition:is_afk%%player_name%"
 
 # ---------------------------------------------------------------------------
 #  When the nametag should be hidden
@@ -268,6 +347,14 @@ visibility:
   # Hide the tag for players vanished by Essentials/CMI/SuperVanish
   # (checks the standard "vanished" metadata key).
   hide-while-vanished: true
+
+  # Hide the tag whenever a condition passes. Same grammar as the `conditions`
+  # section above: a declared name, %condition:name%, or an inline expression.
+  # Checked last, after everything else here, and only when it is set.
+  #
+  #   hide-condition: "%player_world%=creative_plots"
+  #   hide-condition: "is_afk;!permission:displaynames.staff"
+  hide-condition: ""
 
   # Worlds where DisplayNames does nothing at all, e.g. [ "world_the_end" ].
   disabled-worlds: []

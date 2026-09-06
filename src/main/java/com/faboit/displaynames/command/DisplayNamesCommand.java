@@ -1,11 +1,14 @@
 package com.faboit.displaynames.command;
 
 import com.faboit.displaynames.DisplayNames;
+import com.faboit.displaynames.condition.Condition;
+import com.faboit.displaynames.condition.Conditions;
 import com.faboit.displaynames.config.Profile;
 import com.faboit.displaynames.config.Settings;
 import com.faboit.displaynames.nametag.NametagHandle;
 import com.faboit.displaynames.nametag.NametagService;
 import com.faboit.displaynames.nametag.TeamGuard;
+import com.faboit.displaynames.text.PlaceholderResolver;
 import com.faboit.displaynames.text.TextRenderer;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -115,9 +118,13 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         boolean self = target.equals(viewer);
 
         Settings settings = plugin.settings();
-        Profile profile = settings.profileFor(target);
+        PlaceholderResolver resolver = plugin.service().resolver();
+        Profile profile = settings.profileFor(target, resolver);
         String raw = profile.template().raw();
-        String resolved = plugin.service().resolver().resolve(target, raw);
+        // Expanded first and resolved second, exactly as the render path does it, so the verdict
+        // below is about PlaceholderAPI rather than about a condition that swallowed the text.
+        String expanded = settings.conditions().expand(target, raw, resolver);
+        String resolved = resolver.resolve(target, expanded);
 
         send(sender, "<gradient:#55ffff:#ffffff><bold>DisplayNames debug</bold></gradient>"
                 + (self ? "" : " <gray>for <white>" + target.getName()));
@@ -130,8 +137,11 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
                 : papi.getDescription().getVersion() + (papi.isEnabled() ? " <green>(enabled)" : " <red>(DISABLED)"));
 
         line(sender, "Template", escaped(raw));
+        if (!expanded.equals(raw)) {
+            line(sender, "After conditions", escaped(expanded));
+        }
         line(sender, "Resolved", escaped(resolved));
-        if (raw.equals(resolved)) {
+        if (expanded.equals(resolved)) {
             line(sender, "Verdict", "<red>nothing was substituted <gray>- every placeholder above "
                     + "is unknown to PlaceholderAPI, so the expansion providing it is not installed.");
         } else {
@@ -139,7 +149,33 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
                     + "%name% is an expansion you have not installed.");
         }
 
+        reportConditions(sender, target, settings.conditions(), resolver);
         reportPlate(sender, viewer, target, self);
+    }
+
+    /**
+     * Evaluates every declared condition for the target and prints the verdict.
+     *
+     * <p>A condition that quietly never matches is the hardest thing about this feature to
+     * diagnose from in-game, because the only symptom is a profile that does not apply. Showing
+     * each one's answer for a named player turns that into a single command.
+     */
+    private void reportConditions(CommandSender sender, Player target, Conditions conditions,
+                                  PlaceholderResolver resolver) {
+        if (conditions.isEmpty()) return;
+        line(sender, "Conditions", conditions.size() + " declared");
+        for (Condition condition : conditions.all()) {
+            boolean matched;
+            try {
+                matched = conditions.matches(target, condition, resolver);
+            } catch (RuntimeException ex) {
+                line(sender, "  " + condition.id(), "<red>failed: " + ex.getClass().getSimpleName());
+                continue;
+            }
+            line(sender, "  " + condition.id(), (matched ? "<green>true" : "<red>false")
+                    + " <dark_gray>(" + condition.size() + " check(s), "
+                    + (condition.requireAll() ? "AND" : "OR") + ")");
+        }
     }
 
     /**
@@ -206,6 +242,8 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         line(sender, "Refresh interval", settings.autoRefresh() ? settings.refreshInterval() + " ticks" : "manual");
         line(sender, "Placeholders", plugin.placeholdersAvailable() ? "PlaceholderAPI" : "unavailable");
         line(sender, "Profiles", String.valueOf(settings.profiles().size()));
+        line(sender, "Conditions", settings.conditions().size()
+                + (settings.hideCondition() != null ? " <dark_gray>(+ a hide condition)" : ""));
         line(sender, "Text updates sent", String.valueOf(updates));
         line(sender, "Updates avoided", skipped + " <dark_gray>(" + skipRate + " of passes)");
         line(sender, "MiniMessage parses", String.valueOf(renderer.parseCount()));
@@ -233,7 +271,7 @@ public final class DisplayNamesCommand implements CommandExecutor, TabCompleter 
         }
 
         if (sender instanceof Player player) {
-            line(sender, "Your profile", settings.profileFor(player).id());
+            line(sender, "Your profile", settings.profileFor(player, plugin.service().resolver()).id());
         }
     }
 

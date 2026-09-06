@@ -1,6 +1,7 @@
 package com.faboit.displaynames.nametag;
 
 import com.faboit.displaynames.DisplayNames;
+import com.faboit.displaynames.condition.Condition;
 import com.faboit.displaynames.config.Anchor;
 import com.faboit.displaynames.config.DisplayOptions;
 import com.faboit.displaynames.config.Profile;
@@ -238,7 +239,7 @@ public final class NametagHandle {
 
         // Resolved before the entity is touched: a profile carries its own appearance, so which
         // profile applies decides how the entity has to be built, not just what it says.
-        Profile profile = settings.profileFor(player);
+        Profile profile = settings.profileFor(player, service.resolver());
         if (!ensureDisplay(settings, profile)) return;
 
         applySeeThrough(settings, profile.display());
@@ -281,7 +282,9 @@ public final class NametagHandle {
         // Nothing re-evaluates on its own when auto-refresh is off.
         if (!settings.autoRefresh() && !force && !blank && lastProfile == profile) return;
 
-        String resolved = service.resolver().resolve(player, template.raw());
+        // Condition references are expanded before the resolver runs, so a %condition:x% can
+        // itself contain placeholders and still end up resolved.
+        String resolved = settings.conditions().resolve(player, template.raw(), service.resolver());
         if (!force && !blank && lastProfile == profile && resolved.equals(lastResolved)) {
             service.countSkipped();
             return;
@@ -427,7 +430,10 @@ public final class NametagHandle {
         if (settings.hideWhileSneaking() && player.isSneaking()) return true;
         if (settings.hideInSpectator() && player.getGameMode() == GameMode.SPECTATOR) return true;
         if (settings.hideWhileInvisible() && isInvisible()) return true;
-        return settings.hideWhileVanished() && isVanished();
+        if (settings.hideWhileVanished() && isVanished()) return true;
+        // Last, and only if nothing cheaper already decided: this one can reach PlaceholderAPI.
+        Condition hide = settings.hideCondition();
+        return hide != null && hide.matches(player, settings.conditions(), service.resolver(), 0);
     }
 
     /**

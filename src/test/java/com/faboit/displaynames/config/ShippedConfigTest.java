@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -49,6 +50,17 @@ class ShippedConfigTest {
         assertTrue(shipped().profiles().isEmpty(),
                 "the example profiles must ship commented out so a fresh install renders "
                         + "nametag.lines and nothing else");
+    }
+
+    @Test
+    void noConditionIsActiveOutOfTheBox() {
+        // Same reasoning as the profiles above: the examples document the grammar, they do not
+        // configure the server. A shipped condition would also be evaluated on every refresh.
+        Settings settings = shipped();
+        assertTrue(settings.conditions().isEmpty(),
+                "the example conditions in config.yml must ship commented out");
+        assertNull(settings.hideCondition(),
+                "visibility.hide-condition ships empty, so nothing extra hides a tag");
     }
 
     @Test
