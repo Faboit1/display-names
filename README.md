@@ -3,6 +3,9 @@
 Replaces the vanilla username plate above every player with a **multi-line `TextDisplay`**
 that supports **MiniMessage** formatting and **PlaceholderAPI** placeholders.
 
+Formats *and* appearance can be switched per player by permission or by **TAB-style
+conditions**.
+
 Built for **Folia**, and runs unchanged on **Paper**.
 
 ```yaml
@@ -123,16 +126,80 @@ coming *out* of a placeholder (LuckPerms prefixes, Vault, chat plugins) are conv
 MiniMessage automatically — see `text.legacy-colors`. Placeholders that already contain
 MiniMessage work too.
 
-### Per-permission formats
+### Conditions
 
-The first profile — highest `priority` — whose `permission` the player has wins. Players
-matching nothing get `nametag.lines`.
+Named per-player tests, using **TAB's condition grammar** — conditions copied out of a TAB
+config work here unchanged. A condition can drive text *and* settings: it gates a whole
+profile, so it picks the offset, scale, billboard and view range too, not just the format.
 
-Profiles ship **commented out**, and every profile permission is registered at startup with a
-default of `false`. Both matter: Bukkit resolves a permission nobody has declared as
-`PermissionDefault.OP`, so an undeclared profile node is held by *every operator* — which
-silently hands admins the highest-priority profile and overrides the nametag they configured.
-Grant profile nodes explicitly in your permission plugin, the same as any other node.
+```yaml
+conditions:
+  is_afk:
+    conditions:
+      - "%essentials_afk%=true"
+    true: "<gray>[AFK] "
+    false: ""
+
+  low_health:
+    type: OR                       # AND is the default
+    conditions:
+      - "%player_health% < 6"
+      - "%player_is_on_fire%"
+    true: "<red>!"
+    false: ""
+```
+
+| Operator | |
+|---|---|
+| `>=` `>` `<=` `<` | numeric; a side that is not a number never matches |
+| `=` `!=` | equals / does not equal |
+| `<-` `!<-` | contains / does not contain |
+| `\|-` `!\|-` | starts with / does not start with |
+| `-\|` `!-\|` | ends with / does not end with |
+| `permission:<node>` | holds the permission |
+| `!permission:<node>` | does not hold it |
+
+Either side may be a placeholder, or a literal, or both. A check that is nothing but
+`%placeholder%` passes when it resolves to `true`, and `!%placeholder%` is its opposite. Text
+comparisons **ignore case** here, which is the one deliberate difference from TAB.
+
+Three shorthands save a block: a bare list is an `AND`, a bare string is a single check, and a
+whole condition fits on one line by joining checks with `;` for AND or `|` for OR.
+
+```yaml
+conditions:
+  in_the_nether:
+    - "%player_world%=world_nether"
+  is_staff: "permission:displaynames.staff"
+  afk_civilian: "%essentials_afk%=true;!permission:displaynames.staff"
+```
+
+`%condition:name%` inserts a condition's `true:` or `false:` output, and works anywhere a
+placeholder does — inside `nametag.lines`, inside a profile's lines, and inside another
+condition's output:
+
+```yaml
+nametag:
+  lines:
+    - "%condition:is_afk%<white>%player_name% %condition:low_health%"
+```
+
+Conditions may reference each other; a reference loop is found and dropped at **startup**, and
+a runtime depth cap backs it up, because a stack overflow on a Folia region thread would take
+the region with it. A condition nothing points at is never evaluated, so declaring one costs
+nothing until it is used.
+
+`/dn debug <player>` prints every declared condition's live verdict for that player, which is
+usually faster than guessing at a placeholder that is not resolving.
+
+### Profiles: per-player formats and settings
+
+The first profile — highest `priority` — that the player matches wins. Players matching
+nothing get `nametag.lines`.
+
+A profile is gated by a `permission`, a `condition`, or both; it needs at least one, and when
+it has both, both must pass. `condition` takes the name of a condition declared above,
+`%condition:name%`, or an inline expression.
 
 ```yaml
 profiles:
@@ -143,6 +210,30 @@ profiles:
       - "<gradient:#ff5555:#ffaa00><bold>ADMIN</bold></gradient>"
       - "<white>%player_name%"
 ```
+
+`lines` are optional. A profile without them keeps `nametag.lines` and exists purely to change
+**settings** — a bigger, glowing tag while a player is in combat, a higher one while they are
+riding something:
+
+```yaml
+profiles:
+  combat:
+    condition: "%combat_time% > 0"
+    priority: 200
+    display:
+      scale: 1.25
+      glow-color: "#ff5555"
+```
+
+A profile that would change nothing (no lines *and* no appearance override) or that would apply
+to everybody (no permission *and* no condition) is refused at load with a warning, rather than
+quietly replacing every nametag on the server.
+
+Profiles ship **commented out**, and every profile permission is registered at startup with a
+default of `false`. Both matter: Bukkit resolves a permission nobody has declared as
+`PermissionDefault.OP`, so an undeclared profile node is held by *every operator* — which
+silently hands admins the highest-priority profile and overrides the nametag they configured.
+Grant profile nodes explicitly in your permission plugin, the same as any other node.
 
 ### Position and appearance
 
@@ -190,15 +281,30 @@ appearance is baked in when the entity is created.
 ### Hiding
 
 Tags are **see-through by default**, so they stay readable underground and behind walls.
-Sneaking or drinking an invisibility potion drops them back to line-of-sight only rather than
-hiding them outright — `see-through-while-sneaking` and `see-through-while-invisible` control
-that, and `hide-while-sneaking` / `hide-while-invisible` hide the tag entirely instead. Because
-see-through is a live entity property, switching it is a metadata flip, not a respawn.
+Sneaking drops them back to line-of-sight only rather than hiding them outright —
+`see-through-while-sneaking` controls that, and `hide-while-sneaking` hides the tag entirely
+instead. Because see-through is a live entity property, switching it is a metadata flip, not a
+respawn.
+
+**Invisibility hides the tag outright**, and that one ships on: vanilla hides the username plate
+of an invisible player, so a tag left floating there gives away exactly what the game itself
+hides. Both routes count — the potion effect, whether drunk or splashed, and plugins that set
+the invisibility flag directly. `hide-while-invisible: false` restores the old behaviour, in
+which case `see-through-while-invisible` applies again.
 
 `visibility` controls the rest: `hide-from-self` (on by default — the tag
 would otherwise float in the wearer's face in first person),
 `hide-in-spectator`, `hide-while-vanished` (reads the standard
 `vanished` metadata used by Essentials, CMI and SuperVanish) and `disabled-worlds`.
+
+`visibility.hide-condition` hides the tag whenever a condition passes — the same grammar as
+above, either a declared name or an inline expression. It is checked last, after everything
+else here, and only when it is set.
+
+```yaml
+visibility:
+  hide-condition: "%player_world%=creative_plots"
+```
 
 ### Removing the vanilla username plate
 

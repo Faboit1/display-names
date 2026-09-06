@@ -3,7 +3,12 @@ name: Build
 on:
   push:
     branches: [ main ]
+  # `ready_for_review` is not in the default set, and without it a draft that is
+  # marked ready never builds again - so "Merge when green" below, which skips
+  # drafts, never gets a run it is allowed to merge on and the pull request sits
+  # green forever. Naming one type means naming them all.
   pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
   workflow_dispatch:
 
 concurrency:

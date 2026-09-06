@@ -1,8 +1,11 @@
 package com.faboit.displaynames.config;
 
+import com.faboit.displaynames.condition.Condition;
+import com.faboit.displaynames.condition.Conditions;
 import com.faboit.displaynames.nametag.TeamGuard;
 import com.faboit.displaynames.text.LegacyColors;
 import com.faboit.displaynames.text.NametagTemplate;
+import com.faboit.displaynames.text.PlaceholderResolver;
 import com.faboit.displaynames.text.TextRenderer;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
@@ -33,6 +36,8 @@ public final class Settings {
     private final long followInterval;
     private final Profile defaultProfile;
     private final List<Profile> profiles;
+    private final Conditions conditions;
+    private final Condition hideCondition;
     private final Set<String> disabledWorlds;
 
     private final boolean hideFromSelf;
@@ -60,13 +65,18 @@ public final class Settings {
         this.anchor = Anchor.parse(displaySection.getString("anchor"), Anchor.MOUNT);
         this.followInterval = Math.max(1L, displaySection.getLong("follow-interval", 1L));
 
+        // Loaded before the profiles, which may name a condition, and before visibility, which may
+        // hide a tag by one.
+        this.conditions = Conditions.load(config.getConfigurationSection("conditions"), logger);
+
         List<String> defaultLines = config.getStringList("nametag.lines");
         if (defaultLines.isEmpty()) {
             logger.warning("nametag.lines is empty - players without a matching profile get no nametag.");
         }
-        this.defaultProfile = new Profile("default", null, Integer.MIN_VALUE,
+        this.defaultProfile = new Profile("default", null, Integer.MIN_VALUE, null,
                 NametagTemplate.compile(defaultLines, renderer), display);
-        this.profiles = loadProfiles(config.getConfigurationSection("profiles"), renderer, display, logger);
+        this.profiles = loadProfiles(config.getConfigurationSection("profiles"), renderer, display,
+                conditions, defaultProfile.template(), logger);
 
         Set<String> worlds = new HashSet<>();
         for (String world : config.getStringList("visibility.disabled-worlds")) {
@@ -77,13 +87,18 @@ public final class Settings {
         ConfigurationSection visibility = section(config, "visibility");
         this.hideFromSelf = visibility.getBoolean("hide-from-self", true);
         this.hideWhileSneaking = visibility.getBoolean("hide-while-sneaking", false);
-        this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", false);
-        // Sneaking and invisibility drop the tag back to line-of-sight only rather than hiding
-        // it, which is what vanilla nametags do and what the see-through default trades away.
+        // On by default, unlike sneaking: vanilla hides the username plate of an invisible
+        // player outright, so leaving the tag up is the one case where a custom nametag gives
+        // away something the game itself hides.
+        this.hideWhileInvisible = visibility.getBoolean("hide-while-invisible", true);
+        // Sneaking drops the tag back to line-of-sight only rather than hiding it, which is what
+        // vanilla nametags do and what the see-through default trades away.
         this.seeThroughWhileSneaking = visibility.getBoolean("see-through-while-sneaking", false);
         this.seeThroughWhileInvisible = visibility.getBoolean("see-through-while-invisible", false);
         this.hideInSpectator = visibility.getBoolean("hide-in-spectator", true);
         this.hideWhileVanished = visibility.getBoolean("hide-while-vanished", true);
+        this.hideCondition = conditions.reference(visibility.getString("hide-condition"),
+                "visibility.hide-condition", logger);
 
         // Accepts both the old `hide-vanilla-nametag: true` boolean and the current block form.
         if (visibility.isConfigurationSection("hide-vanilla-nametag")) {
@@ -128,8 +143,21 @@ public final class Settings {
         return new Settings(config, renderer, logger);
     }
 
+    /**
+     * Reads the {@code profiles:} section.
+     *
+     * <p>A profile has to actually do something to be worth a per-refresh check, and it has to be
+     * reachable at all, so two shapes are dropped with a warning: one gated by neither a
+     * permission nor a condition (it would apply to everybody, silently outranking
+     * {@code nametag.lines}), and one that overrides no text and no appearance.
+     *
+     * <p>Lines are optional. A profile with none inherits {@code nametag.lines} and exists purely
+     * to override settings - a bigger scale while a player is in combat, a higher tag for someone
+     * riding a horse - which is the whole point of gating a profile on a condition.
+     */
     private static List<Profile> loadProfiles(ConfigurationSection root, TextRenderer renderer,
-                                              DisplayOptions parent, Logger logger) {
+                                              DisplayOptions parent, Conditions conditions,
+                                              NametagTemplate inherited, Logger logger) {
         if (root == null) return List.of();
 
         List<Profile> loaded = new ArrayList<>();
@@ -138,20 +166,31 @@ public final class Settings {
             if (entry == null) continue;
 
             String permission = entry.getString("permission");
-            if (permission == null || permission.isBlank()) {
-                logger.warning("Profile '" + id + "' has no permission set and was skipped.");
+            if (permission != null && permission.isBlank()) permission = null;
+            Condition condition = conditions.reference(entry.getString("condition"),
+                    "profiles." + id + ".condition", logger);
+            if (permission == null && condition == null) {
+                logger.warning("Profile '" + id + "' has neither a permission nor a condition, so it "
+                        + "would apply to everybody and override nametag.lines. It was skipped.");
                 continue;
             }
-            List<String> lines = entry.getStringList("lines");
-            if (lines.isEmpty()) {
-                logger.warning("Profile '" + id + "' has no lines and was skipped.");
-                continue;
-            }
-            // Inherits the global appearance unless the profile overrides part of it.
+
+            // Inherits the global appearance unless the profile overrides part of it. An untouched
+            // profile gets the parent instance back, which is how "overrides nothing" is spotted.
             DisplayOptions profileDisplay = DisplayOptions.load(entry.getConfigurationSection("display"),
                     entry.getConfigurationSection("offset"), parent, logger);
-            loaded.add(new Profile(id, permission, entry.getInt("priority", 0),
-                    NametagTemplate.compile(lines, renderer), profileDisplay));
+
+            List<String> lines = entry.getStringList("lines");
+            if (lines.isEmpty() && profileDisplay == parent) {
+                logger.warning("Profile '" + id + "' has no lines and overrides no display setting, "
+                        + "so it would change nothing. It was skipped.");
+                continue;
+            }
+            NametagTemplate template = lines.isEmpty()
+                    ? inherited : NametagTemplate.compile(lines, renderer);
+
+            loaded.add(new Profile(id, permission, entry.getInt("priority", 0), condition,
+                    template, profileDisplay));
         }
         loaded.sort(Comparator.comparingInt(Profile::priority).reversed());
         return Collections.unmodifiableList(loaded);
@@ -171,12 +210,25 @@ public final class Settings {
         return widest;
     }
 
-    /** Highest-priority profile the player has permission for, or the default. */
-    public Profile profileFor(Player player) {
+    /**
+     * Highest-priority profile this player matches right now, or the default.
+     *
+     * <p>Permission first, condition second, and only when the permission passed: a permission is
+     * a map lookup, while a condition can cost a PlaceholderAPI call per check, and this runs on
+     * every refresh for every player.
+     *
+     * @param resolver used by conditions; pass the live one, since a condition on an unresolved
+     *                 placeholder is a condition that never matches
+     */
+    public Profile profileFor(Player player, PlaceholderResolver resolver) {
         // profiles is sorted by descending priority, so the first hit is the winner.
         for (int i = 0, size = profiles.size(); i < size; i++) {
             Profile profile = profiles.get(i);
-            if (player.hasPermission(profile.permission())) return profile;
+            String permission = profile.permission();
+            if (permission != null && !player.hasPermission(permission)) continue;
+            Condition condition = profile.condition();
+            if (condition != null && !condition.matches(player, conditions, resolver, 0)) continue;
+            return profile;
         }
         return defaultProfile;
     }
@@ -219,6 +271,16 @@ public final class Settings {
 
     public List<Profile> profiles() {
         return profiles;
+    }
+
+    /** Every condition declared in config.yml; never null, empty when none are. */
+    public Conditions conditions() {
+        return conditions;
+    }
+
+    /** Condition that hides a tag while it matches, or {@code null} when none is configured. */
+    public Condition hideCondition() {
+        return hideCondition;
     }
 
     /** The format used by players who match no profile. */

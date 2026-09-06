@@ -12,6 +12,7 @@ import java.util.logging.Logger;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -52,6 +53,17 @@ class ShippedConfigTest {
     }
 
     @Test
+    void noConditionIsActiveOutOfTheBox() {
+        // Same reasoning as the profiles above: the examples document the grammar, they do not
+        // configure the server. A shipped condition would also be evaluated on every refresh.
+        Settings settings = shipped();
+        assertTrue(settings.conditions().isEmpty(),
+                "the example conditions in config.yml must ship commented out");
+        assertNull(settings.hideCondition(),
+                "visibility.hide-condition ships empty, so nothing extra hides a tag");
+    }
+
+    @Test
     void theDefaultNametagStillUsesPlaceholders() {
         assertTrue(shipped().defaultProfile().template().dynamic(),
                 "the shipped nametag.lines should demonstrate placeholders");
@@ -80,14 +92,34 @@ class ShippedConfigTest {
 
     @Test
     void tagsAreVisibleThroughTerrainByDefault() {
-        // Requested behaviour: readable underground, with sneaking and invisibility dropping
-        // back to line-of-sight only rather than hiding the tag outright.
+        // Requested behaviour: readable underground, with sneaking dropping back to
+        // line-of-sight only rather than hiding the tag outright.
         Settings settings = shipped();
         assertTrue(settings.display().seeThrough());
         assertFalse(settings.seeThroughWhileSneaking());
         assertFalse(settings.seeThroughWhileInvisible());
         assertFalse(settings.hideWhileSneaking());
-        assertFalse(settings.hideWhileInvisible());
+    }
+
+    @Test
+    void invisibilityHidesTheTagOutright() {
+        // Vanilla hides the username plate of an invisible player. A tag that stays up is a
+        // custom nametag giving away exactly what the game itself hides, so this one is not a
+        // taste setting - it ships on, and it must stay on for a config that omits the key.
+        assertTrue(shipped().hideWhileInvisible());
+
+        YamlConfiguration bare = new YamlConfiguration();
+        try {
+            bare.loadFromString("""
+                    nametag:
+                      lines:
+                        - "<white>%player_name%"
+                    """);
+        } catch (Exception ex) {
+            throw new AssertionError("fixture is not valid YAML", ex);
+        }
+        assertTrue(Settings.load(bare, Settings.createRenderer(bare, LOGGER), LOGGER)
+                .hideWhileInvisible());
     }
 
     @Test
